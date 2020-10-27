@@ -10,6 +10,9 @@ DECLARE_CYCLE_STAT(TEXT("UpdateSection RT"), STAT_ProcMesh_UpdateSectionRT, STAT
 DECLARE_CYCLE_STAT(TEXT("Get ProcMesh Elements"), STAT_ProcMesh_GetMeshElements, STATGROUP_ProceduralMesh);
 DECLARE_CYCLE_STAT(TEXT("Update Collision"), STAT_ProcMesh_UpdateCollision, STATGROUP_ProceduralMesh);*/
 
+
+DEFINE_LOG_CATEGORY_STATIC(LogLineRendererComponent, Log, All);
+
 /**
 /** Line section description */
 struct FLineMeshSection
@@ -38,8 +41,6 @@ public:
     bool bSectionVisible;
     int32 SectionIndex;
 };
-
-DEFINE_LOG_CATEGORY_STATIC(LogLineRendererComponent, Log, All);
 
 ULineMeshComponent::ULineMeshComponent(const FObjectInitializer& ObjectInitializer)
 : Super(ObjectInitializer)
