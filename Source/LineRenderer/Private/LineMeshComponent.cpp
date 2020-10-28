@@ -67,7 +67,7 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
 	if (Vertices.Num() - 1 > 0)
 	{
 		NewSection->ProcIndexBuffer.Reset();
-		NewSection->ProcIndexBuffer.Reserve(2 * (Vertices.Num() - 1));
+		NewSection->ProcIndexBuffer.SetNumZeroed(2 * (Vertices.Num() - 1) + 1);
 	}
 
 	const int32 NumTris = Vertices.Num() - 1;
@@ -79,138 +79,100 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
 	}
 
 	NewSection->SectionIndex = SectionIndex;
+    NewSection->SectionLocalBox = FBox(Vertices);
 
     UpdateLocalBounds(); // Update overall bounds
 
 	PendingSections.Enqueue(NewSection);
 }
 
-void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& LineColor)
+void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionGT);
+    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
 
-    /*if (SectionIndex < ProcMeshSections.Num())
+    if (SectionIndex >= LineMeshSceneProxy->GetNumSections())
     {
-        FLineMeshSection& Section = ProcMeshSections[SectionIndex];
-        const int32 NumVerts = Vertices.Num();
-        const int32 PreviousNumVerts = Section.ProcVertexBuffer.Num();
+        return;
+    }
 
-        // See if positions are changing
-        const bool bSameVertexCount = PreviousNumVerts == NumVerts;
+    // Recreate line if mismatch in number of vertices
+    if (Vertices.Num() != LineMeshSceneProxy->GetNumPointsInSection(SectionIndex))
+    {
+        CreateLine(SectionIndex, Vertices, Color);
+        return;
+    }
 
-        // Update bounds, if we are getting new position data
-        if (bSameVertexCount)
+    TSharedPtr<FLineMeshSectionUpdateData> SectionData(MakeShareable(new FLineMeshSectionUpdateData));
+    SectionData->SectionIndex = SectionIndex;
+    SectionData->SectionLocalBox = FBox(Vertices);
+    SectionData->VertexBuffer = Vertices;
+
+    if (Vertices.Num() - 1 > 0)
+    {
+        SectionData->IndexBuffer.Reset();
+        SectionData->IndexBuffer.SetNumZeroed(2 * (Vertices.Num() - 1) + 1);
+    }
+
+    const int32 NumTris = Vertices.Num() - 1;
+    for (int32 TriInd = 0; TriInd < NumTris; ++TriInd)
+    {
+        SectionData->IndexBuffer[2 * TriInd] = TriInd;
+        SectionData->IndexBuffer[2 * TriInd + 1] = TriInd + 1;
+    }
+
+    // Enqueue command to send to render thread
+    FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    ENQUEUE_RENDER_COMMAND(FLineMeshSectionUpdate)(
+        [ProcMeshSceneProxy, SectionData](FRHICommandListImmediate& RHICmdList)
         {
-            Section.SectionLocalBox = FBox(Vertices);
-
-            // Iterate through vertex data, copying in new info
-            for (int32 VertIdx = 0; VertIdx < NumVerts; VertIdx++)
-            {
-                FVector& ModifyVert = Section.ProcVertexBuffer[VertIdx];
-
-                // Position data
-                if (Vertices.Num() == NumVerts)
-                {
-                    ModifyVert.Position = Vertices[VertIdx];
-                }
-            }
-
-            // If we have a valid proxy and it is not pending recreation
-            if (SceneProxy && !IsRenderStateDirty())
-            {
-                // Create data to update section
-                FLineMeshSectionUpdateData* SectionData = new FLineMeshSectionUpdateData;
-                SectionData->TargetSection = SectionIndex;
-                SectionData->NewVertexBuffer = Section.ProcVertexBuffer;
-
-                // Enqueue command to send to render thread
-                FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
-                ENQUEUE_RENDER_COMMAND(FLineMeshSectionUpdate)(
-                    [ProcMeshSceneProxy, SectionData](FRHICommandListImmediate& RHICmdList)
-                    {
-                        ProcMeshSceneProxy->UpdateSection_RenderThread(SectionData);
-                    }
-                );
-            }
-
-            UpdateLocalBounds();		 // Update overall bounds
-            MarkRenderTransformDirty();  // Need to send new bounds to render thread
+            ProcMeshSceneProxy->UpdateSection_RenderThread(SectionData);
         }
-        else
-        {
-            UE_LOG(LogLineRendererComponent, Error, TEXT("Trying to update a procedural mesh component section with a different number of vertices [Previous: %i, New: %i] (clear and recreate mesh section instead)"), PreviousNumVerts, NumVerts);
-        }
-    }*/
+    );
+
+    UpdateLocalBounds();		 // Update overall bounds
+    MarkRenderTransformDirty();  // Need to send new bounds to render thread
 }
 
-void ULineMeshComponent::PostLoad()
+void ULineMeshComponent::RemoveLine(int32 SectionIndex)
 {
-	Super::PostLoad();
+	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+	LineMeshSceneProxy->ClearMeshSection(SectionIndex);
 }
 
-void ULineMeshComponent::ClearMeshSection(int32 SectionIndex)
+void ULineMeshComponent::RemoveAllLines()
 {
-	/*if (SectionIndex < ProcMeshSections.Num())
-	{
-		ProcMeshSections[SectionIndex].Reset();
-		UpdateLocalBounds();
-		MarkRenderStateDirty();
-	}*/
+	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+	LineMeshSceneProxy->ClearAllMeshSections();
 }
 
-void ULineMeshComponent::ClearAllMeshSections()
+void ULineMeshComponent::SetLineVisible(int32 SectionIndex, bool bNewVisibility)
 {
-	/*ProcMeshSections.Empty();
-	UpdateLocalBounds();
-	MarkRenderStateDirty();*/
+	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+	LineMeshSceneProxy->SetMeshSectionVisible(SectionIndex, bNewVisibility);
 }
 
-void ULineMeshComponent::SetMeshSectionVisible(int32 SectionIndex, bool bNewVisibility)
+bool ULineMeshComponent::IsLineVisible(int32 SectionIndex) const
 {
-	/*if(SectionIndex < ProcMeshSections.Num())
-	{
-		// Set game thread state
-		ProcMeshSections[SectionIndex].bSectionVisible = bNewVisibility;
-
-		if (SceneProxy)
-		{
-			// Enqueue command to modify render thread info
-			FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
-			ENQUEUE_RENDER_COMMAND(FLineMeshSectionVisibilityUpdate)(
-				[ProcMeshSceneProxy, SectionIndex, bNewVisibility](FRHICommandListImmediate& RHICmdList)
-				{
-					ProcMeshSceneProxy->SetSectionVisibility_RenderThread(SectionIndex, bNewVisibility);
-				});
-		}
-	}*/
+    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    return LineMeshSceneProxy->IsMeshSectionVisible(SectionIndex);
 }
 
-bool ULineMeshComponent::IsMeshSectionVisible(int32 SectionIndex) const
+int32 ULineMeshComponent::GetNumLines() const
 {
-	return true; //(SectionIndex < ProcMeshSections.Num()) ? ProcMeshSections[SectionIndex].bSectionVisible : false;
+	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+	return LineMeshSceneProxy->GetNumSections();
 }
-
-int32 ULineMeshComponent::GetNumSections() const
-{
-	return 0; //ProcMeshSections.Num();
-}
-
 
 void ULineMeshComponent::UpdateLocalBounds()
 {
-	/*FBox LocalBox(ForceInit);
-
-	for (const FLineMeshSection& Section : ProcMeshSections)
-	{
-		LocalBox += Section.SectionLocalBox;
-	}
-
-	LocalBounds = LocalBox.IsValid ? FBoxSphereBounds(LocalBox) : FBoxSphereBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0); // fallback to reset box sphere bounds
-
-	// Update global bounds
+    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    LineMeshSceneProxy->UpdateLocalBounds();
+    
+    // Update global bounds
 	UpdateBounds();
 	// Need to send to render thread
-	MarkRenderTransformDirty();*/
+	MarkRenderTransformDirty();
 }
 
 FPrimitiveSceneProxy* ULineMeshComponent::CreateSceneProxy()
@@ -220,45 +182,42 @@ FPrimitiveSceneProxy* ULineMeshComponent::CreateSceneProxy()
 	return new FLineMeshSceneProxy(this);
 }
 
-int32 ULineMeshComponent::GetNumMaterials() const
+UMaterialInterface* ULineMeshComponent::GetMaterial(int32 ElementIndex) const
 {
-	return 0; //ProcMeshSections.Num();
+	if (OverrideMaterials.Num() == 0)
+	{
+		if (Material == nullptr)
+		{
+			return UMaterial::GetDefaultMaterial(MD_Surface);
+		}
+
+		return Material;
+	}
+
+    return Super::GetMaterial(ElementIndex);
 }
 
 FBoxSphereBounds ULineMeshComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-	FBoxSphereBounds Ret(LocalBounds.TransformBy(LocalToWorld));
+    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
 
-	Ret.BoxExtent *= BoundsScale;
-	Ret.SphereRadius *= BoundsScale;
+    FBoxSphereBounds LocalBounds = FBoxSphereBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0);
+    if (LineMeshSceneProxy != nullptr)
+    {
+        LocalBounds = LineMeshSceneProxy->GetLocalBounds();
+    }
 
-	return Ret;
+    FBoxSphereBounds Ret(LocalBounds.TransformBy(LocalToWorld));
+
+    Ret.BoxExtent *= BoundsScale;
+    Ret.SphereRadius *= BoundsScale;
+
+    return Ret;
 }
 
-UMaterialInterface* ULineMeshComponent::GetMaterialFromCollisionFaceIndex(int32 FaceIndex, int32& SectionIndex) const
+void ULineMeshComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /*= false*/) const
 {
-	UMaterialInterface* Result = nullptr;
-	/*SectionIndex = 0;
+    Super::GetUsedMaterials(OutMaterials, false);
 
-	if (FaceIndex >= 0)
-	{
-		// Look for element that corresponds to the supplied face
-		int32 TotalFaceCount = 0;
-		for (int32 SectionIdx = 0; SectionIdx < ProcMeshSections.Num(); SectionIdx++)
-		{
-			const FLineMeshSection& Section = ProcMeshSections[SectionIdx];
-			int32 NumFaces = Section.ProcIndexBuffer.Num() / 3;
-			TotalFaceCount += NumFaces;
-
-			if (FaceIndex < TotalFaceCount)
-			{
-				// Grab the material
-				Result = GetMaterial(SectionIdx);
-				SectionIndex = SectionIdx;
-				break;
-			}
-		}
-	}*/
-
-	return Result;
+	OutMaterials.Add(Material);
 }

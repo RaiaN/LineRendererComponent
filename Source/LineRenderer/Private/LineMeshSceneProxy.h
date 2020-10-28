@@ -20,6 +20,20 @@ class ULineMeshComponent;
 class FLineMeshSectionUpdateData;
 
 
+/**
+ *	Struct used to send update to mesh data
+ *	Arrays may be empty, in which case no update is performed.
+ */
+class FLineMeshSectionUpdateData
+{
+public:
+	int32 SectionIndex;
+	TArray<FVector> VertexBuffer;
+	TArray<uint32> IndexBuffer;
+	FBox SectionLocalBox;
+};
+
+
 /** Procedural mesh scene proxy */
 class FLineMeshSceneProxy final : public FPrimitiveSceneProxy
 {
@@ -30,9 +44,7 @@ public:
 	SIZE_T GetTypeHash() const override;
 
 	/** Called on render thread to assign new dynamic data */
-	void UpdateSection_RenderThread(FLineMeshSectionUpdateData* SectionData);
-
-	void SetSectionVisibility_RenderThread(int32 SectionIndex, bool bNewVisibility);
+	void UpdateSection_RenderThread(TSharedPtr<FLineMeshSectionUpdateData> SectionData);
 
 	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const;
@@ -41,9 +53,21 @@ public:
 	virtual uint32 GetMemoryFootprint() const;
 	uint32 GetAllocatedSize() const;
 
+public: 
+    // Accessors for ULineMeshComponent
+	int32 GetNumSections() const;
+	int32 GetNumPointsInSection(int32 SectionIndex) const;
+    void ClearMeshSection(int32 SectionIndex);
+    void ClearAllMeshSections();
+    void SetMeshSectionVisible(int32 SectionIndex, bool bNewVisibility);
+    bool IsMeshSectionVisible(int32 SectionIndex) const;
+	void UpdateLocalBounds();
+	FBoxSphereBounds GetLocalBounds() const;
+
 private:
 	ULineMeshComponent* Component;
 	FMaterialRelevance MaterialRelevance;
+	FBoxSphereBounds LocalBounds;
 
 	mutable TMap<int32, TSharedPtr<FLineMeshProxySection>> Sections;
 };

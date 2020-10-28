@@ -17,25 +17,14 @@ public:
     FLocalVertexFactory VertexFactory;
     /** Whether this section is currently visible */
     bool bSectionVisible;
+    /** Section bounding box */
+    FBox SectionLocalBox;
 
     FLineMeshProxySection(ERHIFeatureLevel::Type InFeatureLevel)
         : Material(NULL)
         , VertexFactory(InFeatureLevel, "FLineMeshProxySection")
         , bSectionVisible(true)
     {}
-};
-
-/**
- *	Struct used to send update to mesh data
- *	Arrays may be empty, in which case no update is performed.
- */
-class FLineMeshSectionUpdateData
-{
-public:
-    /** Section to update */
-    int32 TargetSection;
-    /** New vertex information */
-    TArray<FVector> NewVertexBuffer;
 };
 
 
@@ -50,8 +39,7 @@ FLineMeshSceneProxy::~FLineMeshSceneProxy()
     for (TTuple<int32, TSharedPtr<FLineMeshProxySection>> KeyValueIter : Sections)
     {
         TSharedPtr<FLineMeshProxySection> Section = KeyValueIter.Value;
-
-        if (Section != nullptr)
+        if (Section.IsValid())
         {
             Section->VertexBuffers.PositionVertexBuffer.ReleaseResource();
             Section->VertexBuffers.StaticMeshVertexBuffer.ReleaseResource();
@@ -75,6 +63,12 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
     TSharedPtr<FLineMeshSection> SrcSection;
     while (Component->PendingSections.Dequeue(SrcSection))
     {
+        // release resources when overriding existing section 
+        if (Sections.Contains(SrcSection->SectionIndex))
+        {
+            const_cast<FLineMeshSceneProxy*>(this)->ClearMeshSection(SrcSection->SectionIndex);
+        }
+
         // Copy data from vertex buffer
         const int32 NumVerts = SrcSection->ProcVertexBuffer.Num();
 
@@ -91,13 +85,10 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
 
             // Grab material
             NewSection->Material = Component->GetMaterial(SrcSection->SectionIndex);
-            if (NewSection->Material == NULL)
-            {
-                NewSection->Material = UMaterial::GetDefaultMaterial(MD_Surface);
-            }
 
             // Copy visibility info
             NewSection->bSectionVisible = SrcSection->bSectionVisible;
+            NewSection->SectionLocalBox = SrcSection->SectionLocalBox;
 
             Sections.Add(SrcSection->SectionIndex, NewSection);
         }
@@ -126,7 +117,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
     {
         TSharedPtr<FLineMeshProxySection> Section = KeyValueIter.Value;
 
-        if (Section != nullptr && Section->bSectionVisible)
+        if (Section.IsValid() && Section->bSectionVisible)
         {
             FMaterialRenderProxy* MaterialProxy = Section->Material->GetRenderProxy();
 
@@ -138,10 +129,15 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     const FSceneView* View = Views[ViewIndex];
                     // Draw the mesh.
                     FMeshBatch& Mesh = Collector.AllocateMesh();
-                    FMeshBatchElement& BatchElement = Mesh.Elements[0];
-                    BatchElement.IndexBuffer = &Section->IndexBuffer;
                     Mesh.VertexFactory = &Section->VertexFactory;
                     Mesh.MaterialRenderProxy = MaterialProxy;
+                    Mesh.ReverseCulling = IsLocalToWorldDeterminantNegative();
+                    Mesh.Type = PT_LineList;
+                    Mesh.DepthPriorityGroup = SDPG_World;
+                    Mesh.bCanApplyViewModeOverrides = false;
+
+                    FMeshBatchElement& BatchElement = Mesh.Elements[0];
+                    BatchElement.IndexBuffer = &Section->IndexBuffer;
 
                     bool bHasPrecomputedVolumetricLightmap;
                     FMatrix PreviousLocalToWorld;
@@ -157,10 +153,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     BatchElement.NumPrimitives = Section->IndexBuffer.GetNumIndices() / 2;
                     BatchElement.MinVertexIndex = 0;
                     BatchElement.MaxVertexIndex = Section->VertexBuffers.PositionVertexBuffer.GetNumVertices() - 1;
-                    Mesh.ReverseCulling = IsLocalToWorldDeterminantNegative();
-                    Mesh.Type = PT_LineList;
-                    Mesh.DepthPriorityGroup = SDPG_World;
-                    Mesh.bCanApplyViewModeOverrides = false;
+                   
                     Collector.AddMesh(ViewIndex, Mesh);
                 }
             }
@@ -183,83 +176,52 @@ FPrimitiveViewRelevance FLineMeshSceneProxy::GetViewRelevance(const FSceneView* 
     return Result;
 }
 
-void FLineMeshSceneProxy::UpdateSection_RenderThread(FLineMeshSectionUpdateData* SectionData)
+void FLineMeshSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineMeshSectionUpdateData> SectionData)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionRT);
 
-    check(IsInRenderingThread());
+    check (IsInRenderingThread());
+    check (SectionData.IsValid());
 
-    // Check we have data 
-    /*if(	SectionData != nullptr)
+    if (!Sections.Contains(SectionData->SectionIndex))
     {
-        // Check it references a valid section
-        if (SectionData->TargetSection < Sections.Num() &&
-            Sections[SectionData->TargetSection] != nullptr)
+        return;
+    }
+
+    // Check it references a valid section
+    if (Sections.Contains(SectionData->SectionIndex))
+    {
+        TSharedPtr<FLineMeshProxySection> Section = Sections[SectionData->SectionIndex];
+
+        // Lock vertex buffer
+        const int32 NumVerts = SectionData->VertexBuffer.Num();
+
+        // Iterate through vertex data, copying in new info
+        for (int32 i = 0; i < NumVerts; i++)
         {
-            FLineMeshProxySection* Section = Sections[SectionData->TargetSection];
-
-            // Lock vertex buffer
-            const int32 NumVerts = SectionData->NewVertexBuffer.Num();
-
-            // Iterate through vertex data, copying in new info
-            for(int32 i=0; i<NumVerts; i++)
-            {
-                const FVector& ProcVert = SectionData->NewVertexBuffer[i];
-                FDynamicMeshVertex Vertex;
-                ConvertProcMeshToDynMeshVertex(Vertex, ProcVert);
-
-                Section->VertexBuffers.PositionVertexBuffer.VertexPosition(i) = Vertex.Position;
-                Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexTangents(i, Vertex.TangentX.ToFVector(), Vertex.GetTangentY(), Vertex.TangentZ.ToFVector());
-                Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexUV(i, 0, Vertex.TextureCoordinate[0]);
-                Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexUV(i, 1, Vertex.TextureCoordinate[1]);
-                Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexUV(i, 2, Vertex.TextureCoordinate[2]);
-                Section->VertexBuffers.StaticMeshVertexBuffer.SetVertexUV(i, 3, Vertex.TextureCoordinate[3]);
-                Section->VertexBuffers.ColorVertexBuffer.VertexColor(i) = Vertex.Color;
-            }
-
-            {
-                auto& VertexBuffer = Section->VertexBuffers.PositionVertexBuffer;
-                void* VertexBufferData = RHILockVertexBuffer(VertexBuffer.VertexBufferRHI, 0, VertexBuffer.GetNumVertices() * VertexBuffer.GetStride(), RLM_WriteOnly);
-                FMemory::Memcpy(VertexBufferData, VertexBuffer.GetVertexData(), VertexBuffer.GetNumVertices() * VertexBuffer.GetStride());
-                RHIUnlockVertexBuffer(VertexBuffer.VertexBufferRHI);
-            }
-
-            {
-                auto& VertexBuffer = Section->VertexBuffers.ColorVertexBuffer;
-                void* VertexBufferData = RHILockVertexBuffer(VertexBuffer.VertexBufferRHI, 0, VertexBuffer.GetNumVertices() * VertexBuffer.GetStride(), RLM_WriteOnly);
-                FMemory::Memcpy(VertexBufferData, VertexBuffer.GetVertexData(), VertexBuffer.GetNumVertices() * VertexBuffer.GetStride());
-                RHIUnlockVertexBuffer(VertexBuffer.VertexBufferRHI);
-            }
-
-            {
-                auto& VertexBuffer = Section->VertexBuffers.StaticMeshVertexBuffer;
-                void* VertexBufferData = RHILockVertexBuffer(VertexBuffer.TangentsVertexBuffer.VertexBufferRHI, 0, VertexBuffer.GetTangentSize(), RLM_WriteOnly);
-                FMemory::Memcpy(VertexBufferData, VertexBuffer.GetTangentData(), VertexBuffer.GetTangentSize());
-                RHIUnlockVertexBuffer(VertexBuffer.TangentsVertexBuffer.VertexBufferRHI);
-            }
-
-            {
-                auto& VertexBuffer = Section->VertexBuffers.StaticMeshVertexBuffer;
-                void* VertexBufferData = RHILockVertexBuffer(VertexBuffer.TexCoordVertexBuffer.VertexBufferRHI, 0, VertexBuffer.GetTexCoordSize(), RLM_WriteOnly);
-                FMemory::Memcpy(VertexBufferData, VertexBuffer.GetTexCoordData(), VertexBuffer.GetTexCoordSize());
-                RHIUnlockVertexBuffer(VertexBuffer.TexCoordVertexBuffer.VertexBufferRHI);
-            }
+            Section->VertexBuffers.PositionVertexBuffer.VertexPosition(i) = SectionData->VertexBuffer[i];
         }
 
-        // Free data sent from game thread
-        delete SectionData;
-    }*/
-}
+        Section->IndexBuffer.SetIndices(SectionData->IndexBuffer, EIndexBufferStride::Force16Bit);
 
-void FLineMeshSceneProxy::SetSectionVisibility_RenderThread(int32 SectionIndex, bool bNewVisibility)
-{
-    /*check(IsInRenderingThread());
+        // update vertex buffer
+        {
+            FPositionVertexBuffer& SrcBuffer = Section->VertexBuffers.PositionVertexBuffer;
+            void* DstBuffer = RHILockVertexBuffer(SrcBuffer.VertexBufferRHI, 0, SrcBuffer.GetNumVertices() * SrcBuffer.GetStride(), RLM_WriteOnly);
+            FMemory::Memcpy(DstBuffer, SrcBuffer.GetVertexData(), SrcBuffer.GetNumVertices() * SrcBuffer.GetStride());
+            RHIUnlockVertexBuffer(SrcBuffer.VertexBufferRHI);
+        }
 
-    if(	SectionIndex < Sections.Num() &&
-        Sections[SectionIndex] != nullptr)
-    {
-        Sections[SectionIndex]->bSectionVisible = bNewVisibility;
-    }*/
+        // update index buffer
+        {
+            FRawStaticIndexBuffer& SrcBuffer = Section->IndexBuffer;
+            void* DstBuffer = RHILockIndexBuffer(SrcBuffer.IndexBufferRHI, 0, SrcBuffer.GetIndexDataSize(), RLM_WriteOnly);
+            FMemory::Memcpy(DstBuffer, (uint8*)SrcBuffer.AccessStream16(), SrcBuffer.GetIndexDataSize());
+            RHIUnlockIndexBuffer(SrcBuffer.IndexBufferRHI);
+        }
+
+        Section->SectionLocalBox = SectionData->SectionLocalBox;
+    }
 }
 
 bool FLineMeshSceneProxy::CanBeOccluded() const
@@ -275,4 +237,85 @@ uint32 FLineMeshSceneProxy::GetMemoryFootprint() const
 uint32 FLineMeshSceneProxy::GetAllocatedSize() const
 {
     return FPrimitiveSceneProxy::GetAllocatedSize();
+}
+
+int32 FLineMeshSceneProxy::GetNumSections() const
+{
+    return Sections.Num();
+}
+
+int32 FLineMeshSceneProxy::GetNumPointsInSection(int32 SectionIndex) const
+{
+    if (Sections.Contains(SectionIndex))
+    {
+        return Sections[SectionIndex]->VertexBuffers.PositionVertexBuffer.GetNumVertices();
+    }
+
+    return 0;
+}
+
+void FLineMeshSceneProxy::ClearMeshSection(int32 SectionIndex)
+{
+    ENQUEUE_RENDER_COMMAND(ReleaseSectionResources)(
+        [this, SectionIndex](FRHICommandListImmediate&)
+        {
+            TSharedPtr<FLineMeshProxySection> Section = Sections[SectionIndex];
+
+            BeginReleaseResource(&Section->VertexBuffers.StaticMeshVertexBuffer);
+            BeginReleaseResource(&Section->VertexBuffers.PositionVertexBuffer);
+            BeginReleaseResource(&Section->VertexBuffers.ColorVertexBuffer);
+            BeginReleaseResource(&Section->IndexBuffer);
+            BeginReleaseResource(&Section->VertexFactory);
+
+            Sections.Remove(SectionIndex);
+        }
+    );
+    
+}
+
+void FLineMeshSceneProxy::ClearAllMeshSections()
+{
+    TArray<int32> SectionIndices;
+    Sections.GetKeys(SectionIndices);
+
+    for (int32 SectionIndex : SectionIndices)
+    {
+        ClearMeshSection(SectionIndex);
+    }
+}
+
+void FLineMeshSceneProxy::SetMeshSectionVisible(int32 SectionIndex, bool bNewVisibility)
+{
+    ENQUEUE_RENDER_COMMAND(SetMeshSectionVisibility)(
+        [this, SectionIndex, bNewVisibility](FRHICommandListImmediate&)
+        {
+            if (Sections.Contains(SectionIndex))
+            {
+                Sections[SectionIndex]->bSectionVisible = bNewVisibility;
+            }
+        }
+    );
+}
+
+bool FLineMeshSceneProxy::IsMeshSectionVisible(int32 SectionIndex) const
+{
+    return Sections.Contains(SectionIndex) && Sections[SectionIndex]->bSectionVisible;
+}
+
+void FLineMeshSceneProxy::UpdateLocalBounds()
+{
+    FBox LocalBox(ForceInit);
+
+    for (TTuple<int32, TSharedPtr<FLineMeshProxySection>> KeyValueIter : Sections)
+    {
+        TSharedPtr<FLineMeshProxySection> Section = KeyValueIter.Value;
+        LocalBox += Section->SectionLocalBox;
+    }
+
+    LocalBounds = LocalBox.IsValid ? FBoxSphereBounds(LocalBox) : FBoxSphereBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0); // fallback to reset box sphere bounds
+}
+
+FBoxSphereBounds FLineMeshSceneProxy::GetLocalBounds() const
+{
+    return LocalBounds;
 }

@@ -27,36 +27,33 @@ public:
 	void UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void ClearMeshSection(int32 SectionIndex);
+	void RemoveLine(int32 SectionIndex);
 
-	/** Clear all mesh sections and reset to empty state */
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void ClearAllMeshSections();
+	void RemoveAllLines();
 
-	/** Control visibility of a particular section */
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void SetMeshSectionVisible(int32 SectionIndex, bool bNewVisibility);
+	void SetLineVisible(int32 SectionIndex, bool bNewVisibility);
 
-	/** Returns whether a particular section is currently visible */
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	bool IsMeshSectionVisible(int32 SectionIndex) const;
+	bool IsLineVisible(int32 SectionIndex) const;
 
 	/** Returns number of sections currently created for this component */
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	int32 GetNumSections() const;
+	int32 GetNumLines() const;
 
 	//~ Begin UPrimitiveComponent Interface.
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
-	virtual UMaterialInterface* GetMaterialFromCollisionFaceIndex(int32 FaceIndex, int32& SectionIndex) const override;
+	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	//~ End UPrimitiveComponent Interface.
 
 	//~ Begin UMeshComponent Interface.
-	virtual int32 GetNumMaterials() const override;
+	virtual UMaterialInterface* GetMaterial(int32 ElementIndex) const override;
 	//~ End UMeshComponent Interface.
 
-	//~ Begin UObject Interface
-	virtual void PostLoad() override;
-	//~ End UObject Interface.
+public:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UMaterialInterface* Material;
 
 private:
 	//~ Begin USceneComponent Interface.
@@ -69,9 +66,6 @@ private:
 private:
     /** Pending line mesh sections */
     TQueue<TSharedPtr<FLineMeshSection>> PendingSections;
-
-	/** Local space bounds of mesh */
-    FBoxSphereBounds LocalBounds;
 
     friend class FLineMeshSceneProxy;
 };
