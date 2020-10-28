@@ -112,6 +112,16 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
         );
     }
 
+#if WITH_EDITOR
+    TArray<UMaterialInterface*> UsedMaterials;
+    for (TTuple<int32, UMaterialInstanceDynamic*> KeyValueIter : Component->SectionMaterials)
+    {
+        UsedMaterials.Add(KeyValueIter.Value);
+    }
+
+    const_cast<FLineMeshSceneProxy*>(this)->SetUsedMaterialForVerification(UsedMaterials);
+#endif
+
     // Iterate over sections
     for (TTuple<int32, TSharedPtr<FLineMeshProxySection>> KeyValueIter : Sections)
     {

@@ -81,6 +81,8 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
 	NewSection->SectionIndex = SectionIndex;
     NewSection->SectionLocalBox = FBox(Vertices);
 
+    CreateOrUpdateMaterial(SectionIndex, Color);
+
     UpdateLocalBounds(); // Update overall bounds
 
 	PendingSections.Enqueue(NewSection);
@@ -130,6 +132,8 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& V
         }
     );
 
+    CreateOrUpdateMaterial(SectionIndex, Color);
+
     UpdateLocalBounds();		 // Update overall bounds
     MarkRenderTransformDirty();  // Need to send new bounds to render thread
 }
@@ -138,12 +142,16 @@ void ULineMeshComponent::RemoveLine(int32 SectionIndex)
 {
 	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
 	LineMeshSceneProxy->ClearMeshSection(SectionIndex);
+
+    SectionMaterials.Remove(SectionIndex);
 }
 
 void ULineMeshComponent::RemoveAllLines()
 {
 	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
 	LineMeshSceneProxy->ClearAllMeshSections();
+
+    SectionMaterials.Empty();
 }
 
 void ULineMeshComponent::SetLineVisible(int32 SectionIndex, bool bNewVisibility)
@@ -184,17 +192,25 @@ FPrimitiveSceneProxy* ULineMeshComponent::CreateSceneProxy()
 
 UMaterialInterface* ULineMeshComponent::GetMaterial(int32 ElementIndex) const
 {
-	if (OverrideMaterials.Num() == 0)
-	{
-		if (Material == nullptr)
-		{
-			return UMaterial::GetDefaultMaterial(MD_Surface);
-		}
+    if (SectionMaterials.Contains(ElementIndex))
+    {
+        return SectionMaterials[ElementIndex];
+    }
+    
+    return Material;
+}
 
-		return Material;
-	}
+void ULineMeshComponent::CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color)
+{
+    if (!SectionMaterials.Contains(SectionIndex))
+    {
+        UMaterialInstanceDynamic* MI = UMaterialInstanceDynamic::Create(Material, Material);
+        SectionMaterials.Add(SectionIndex, MI);
+        OverrideMaterials.Add(MI);
+    }
 
-    return Super::GetMaterial(ElementIndex);
+    UMaterialInstanceDynamic* MI = SectionMaterials[SectionIndex];
+    MI->SetVectorParameterValue(TEXT("LineColor"), Color);
 }
 
 FBoxSphereBounds ULineMeshComponent::CalcBounds(const FTransform& LocalToWorld) const
@@ -220,4 +236,9 @@ void ULineMeshComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMateri
     Super::GetUsedMaterials(OutMaterials, false);
 
 	OutMaterials.Add(Material);
+
+    for (TTuple<int32, UMaterialInstanceDynamic*> KeyValuePair : SectionMaterials)
+    {
+        OutMaterials.Add(KeyValuePair.Value);
+    }
 }
