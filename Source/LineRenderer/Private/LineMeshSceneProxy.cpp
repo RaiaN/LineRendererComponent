@@ -2,10 +2,23 @@
 
 #include "LineMeshSceneProxy.h"
 #include "LineMeshComponent.h"
+#include "LineMeshSection.h"
 
 /** Class representing a single section of the proc mesh */
 class FLineMeshProxySection
 {
+public:
+    virtual ~FLineMeshProxySection()
+    {
+        check (IsInRenderingThread());
+
+        VertexBuffers.StaticMeshVertexBuffer.ReleaseResource();
+        VertexBuffers.PositionVertexBuffer.ReleaseResource();
+        VertexBuffers.ColorVertexBuffer.ReleaseResource();
+        IndexBuffer.ReleaseResource();
+        VertexFactory.ReleaseResource();
+    }
+
 public:
     /** Material applied to this section */
     class UMaterialInterface* Material;
@@ -19,11 +32,14 @@ public:
     bool bSectionVisible;
     /** Section bounding box */
     FBox SectionLocalBox;
+    /** Whether this section is initialized i.e. render resources created */
+    bool bInitialized;
 
     FLineMeshProxySection(ERHIFeatureLevel::Type InFeatureLevel)
         : Material(NULL)
         , VertexFactory(InFeatureLevel, "FLineMeshProxySection")
         , bSectionVisible(true)
+        , bInitialized(false)
     {}
 };
 
@@ -36,6 +52,8 @@ FLineMeshSceneProxy::FLineMeshSceneProxy(ULineMeshComponent* InComponent)
 
 FLineMeshSceneProxy::~FLineMeshSceneProxy()
 {
+    check (IsInRenderingThread());
+    
     for (TTuple<int32, TSharedPtr<FLineMeshProxySection>> KeyValueIter : Sections)
     {
         TSharedPtr<FLineMeshProxySection> Section = KeyValueIter.Value;
@@ -60,74 +78,12 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_GetMeshElements);
 
-    TSharedPtr<FLineMeshSection> SrcSection;
-    while (Component->PendingSections.Dequeue(SrcSection))
-    {
-        // release resources when overriding existing section 
-        if (Sections.Contains(SrcSection->SectionIndex))
-        {
-            const_cast<FLineMeshSceneProxy*>(this)->ClearMeshSection(SrcSection->SectionIndex);
-        }
-
-        // Copy data from vertex buffer
-        const int32 NumVerts = SrcSection->ProcVertexBuffer.Num();
-
-        TSharedPtr<FLineMeshProxySection> NewSection(MakeShareable(new FLineMeshProxySection(GetScene().GetFeatureLevel())));
-        {
-            NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 2, true);
-            NewSection->VertexBuffers.PositionVertexBuffer.Init(SrcSection->ProcVertexBuffer, true);
-            NewSection->IndexBuffer.SetIndices(SrcSection->ProcIndexBuffer, EIndexBufferStride::Force16Bit);
-
-            // Enqueue initialization of render resource
-            BeginInitResource(&NewSection->VertexBuffers.PositionVertexBuffer);
-            BeginInitResource(&NewSection->VertexBuffers.StaticMeshVertexBuffer);
-            BeginInitResource(&NewSection->IndexBuffer);
-
-            // Grab material
-            NewSection->Material = Component->GetMaterial(SrcSection->SectionIndex);
-
-            // Copy visibility info
-            NewSection->bSectionVisible = SrcSection->bSectionVisible;
-            NewSection->SectionLocalBox = SrcSection->SectionLocalBox;
-
-            Sections.Add(SrcSection->SectionIndex, NewSection);
-        }
-
-        ENQUEUE_RENDER_COMMAND(LineMeshVertexBuffersInit)(
-            [NewSection](FRHICommandListImmediate& RHICmdList)
-            {
-                FLocalVertexFactory::FDataType Data;
-
-                NewSection->VertexBuffers.PositionVertexBuffer.BindPositionVertexBuffer(&NewSection->VertexFactory, Data);
-                NewSection->VertexBuffers.StaticMeshVertexBuffer.BindTangentVertexBuffer(&NewSection->VertexFactory, Data);
-                NewSection->VertexBuffers.StaticMeshVertexBuffer.BindPackedTexCoordVertexBuffer(&NewSection->VertexFactory, Data);
-                NewSection->VertexBuffers.StaticMeshVertexBuffer.BindLightMapVertexBuffer(&NewSection->VertexFactory, Data, 1);
-                // NewSection->VertexBuffers.ColorVertexBuffer.BindColorVertexBuffer(NewSection->VertexFactory, Data);
-
-                Data.LODLightmapDataIndex = 0;
-
-                NewSection->VertexFactory.SetData(Data);
-                NewSection->VertexFactory.InitResource();
-            }
-        );
-    }
-
-#if WITH_EDITOR
-    TArray<UMaterialInterface*> UsedMaterials;
-    for (TTuple<int32, UMaterialInstanceDynamic*> KeyValueIter : Component->SectionMaterials)
-    {
-        UsedMaterials.Add(KeyValueIter.Value);
-    }
-
-    const_cast<FLineMeshSceneProxy*>(this)->SetUsedMaterialForVerification(UsedMaterials);
-#endif
-
     // Iterate over sections
-    for (TTuple<int32, TSharedPtr<FLineMeshProxySection>> KeyValueIter : Sections)
+    for (const TTuple<int32, TSharedPtr<FLineMeshProxySection>>& KeyValueIter : Sections)
     {
         TSharedPtr<FLineMeshProxySection> Section = KeyValueIter.Value;
 
-        if (Section.IsValid() && Section->bSectionVisible)
+        if (Section.IsValid() && Section->bInitialized && Section->bSectionVisible)
         {
             FMaterialRenderProxy* MaterialProxy = Section->Material->GetRenderProxy();
 
@@ -143,7 +99,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     Mesh.MaterialRenderProxy = MaterialProxy;
                     Mesh.ReverseCulling = IsLocalToWorldDeterminantNegative();
                     Mesh.Type = PT_LineList;
-                    Mesh.DepthPriorityGroup = SDPG_World;
+                    Mesh.DepthPriorityGroup = SDPG_Foreground;
                     Mesh.bCanApplyViewModeOverrides = false;
 
                     FMeshBatchElement& BatchElement = Mesh.Elements[0];
@@ -184,6 +140,74 @@ FPrimitiveViewRelevance FLineMeshSceneProxy::GetViewRelevance(const FSceneView* 
     MaterialRelevance.SetPrimitiveViewRelevance(Result);
     Result.bVelocityRelevance = IsMovable() && Result.bOpaque && Result.bRenderInMainPass;
     return Result;
+}
+
+void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> SrcSection)
+{
+    check(IsInGameThread());
+
+    const int32 SrcSectionIndex = SrcSection->SectionIndex;
+
+    // Copy data from vertex buffer
+    const int32 NumVerts = SrcSection->ProcVertexBuffer.Num();
+
+    TSharedPtr<FLineMeshProxySection> NewSection(MakeShareable(new FLineMeshProxySection(GetScene().GetFeatureLevel())));
+    {
+        NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 2, true);
+        NewSection->VertexBuffers.PositionVertexBuffer.Init(SrcSection->ProcVertexBuffer, true);
+        NewSection->IndexBuffer.SetIndices(SrcSection->ProcIndexBuffer, EIndexBufferStride::Force16Bit);
+
+        // Enqueue initialization of render resource
+        BeginInitResource(&NewSection->VertexBuffers.PositionVertexBuffer);
+        BeginInitResource(&NewSection->VertexBuffers.StaticMeshVertexBuffer);
+        BeginInitResource(&NewSection->IndexBuffer);
+
+        // Grab material
+        NewSection->Material = Component->GetMaterial(SrcSection->SectionIndex);
+
+        // Copy visibility info
+        // Flip visible flag until render resources are initialized
+        NewSection->bSectionVisible = SrcSection->bSectionVisible;
+        NewSection->SectionLocalBox = SrcSection->SectionLocalBox;
+    }
+
+    ENQUEUE_RENDER_COMMAND(LineMeshVertexBuffersInit)(
+        [this, SrcSectionIndex, NewSection](FRHICommandListImmediate& RHICmdList)
+        {
+            FLocalVertexFactory::FDataType Data;
+
+            NewSection->VertexBuffers.PositionVertexBuffer.BindPositionVertexBuffer(&NewSection->VertexFactory, Data);
+            NewSection->VertexBuffers.StaticMeshVertexBuffer.BindTangentVertexBuffer(&NewSection->VertexFactory, Data);
+            NewSection->VertexBuffers.StaticMeshVertexBuffer.BindPackedTexCoordVertexBuffer(&NewSection->VertexFactory, Data);
+            NewSection->VertexBuffers.StaticMeshVertexBuffer.BindLightMapVertexBuffer(&NewSection->VertexFactory, Data, 1);
+
+            Data.LODLightmapDataIndex = 0;
+
+            NewSection->VertexFactory.SetData(Data);
+            NewSection->VertexFactory.InitResource();
+
+#if WITH_EDITOR
+            TArray<UMaterialInterface*> UsedMaterials;
+            Component->GetUsedMaterials(UsedMaterials);
+
+            SetUsedMaterialForVerification(UsedMaterials);
+#endif
+
+            // release resources when overriding existing section 
+            /*if (Sections.Contains(SrcSectionIndex))
+            {
+                ClearMeshSection(SrcSectionIndex);
+                Sections.Remove(SrcSectionIndex);
+            }*/
+
+            // section is ready
+            Sections.Add(SrcSectionIndex, NewSection);
+
+            UpdateLocalBounds();
+
+            NewSection->bInitialized = true;
+        }
+    );
 }
 
 void FLineMeshSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineMeshSectionUpdateData> SectionData)
@@ -271,11 +295,11 @@ void FLineMeshSceneProxy::ClearMeshSection(int32 SectionIndex)
         {
             TSharedPtr<FLineMeshProxySection> Section = Sections[SectionIndex];
 
-            BeginReleaseResource(&Section->VertexBuffers.StaticMeshVertexBuffer);
-            BeginReleaseResource(&Section->VertexBuffers.PositionVertexBuffer);
-            BeginReleaseResource(&Section->VertexBuffers.ColorVertexBuffer);
-            BeginReleaseResource(&Section->IndexBuffer);
-            BeginReleaseResource(&Section->VertexFactory);
+            Section->VertexBuffers.StaticMeshVertexBuffer.ReleaseResource();
+            Section->VertexBuffers.PositionVertexBuffer.ReleaseResource();
+            Section->VertexBuffers.ColorVertexBuffer.ReleaseResource();
+            Section->IndexBuffer.ReleaseResource();
+            Section->VertexFactory.ReleaseResource();
 
             Sections.Remove(SectionIndex);
         }

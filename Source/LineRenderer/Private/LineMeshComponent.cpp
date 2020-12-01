@@ -2,6 +2,7 @@
 
 #include "LineMeshComponent.h"
 #include "LineMeshSceneProxy.h"
+#include "LineMeshSection.h"
 
 /*DECLARE_CYCLE_STAT(TEXT("Create ProcMesh Proxy"), STAT_ProcMesh_CreateSceneProxy, STATGROUP_ProceduralMesh);
 DECLARE_CYCLE_STAT(TEXT("Create Mesh Section"), STAT_ProcMesh_CreateMeshSection, STATGROUP_ProceduralMesh);
@@ -12,35 +13,6 @@ DECLARE_CYCLE_STAT(TEXT("Update Collision"), STAT_ProcMesh_UpdateCollision, STAT
 
 
 DEFINE_LOG_CATEGORY_STATIC(LogLineRendererComponent, Log, All);
-
-/**
-/** Line section description */
-struct FLineMeshSection
-{
-public:
-    FLineMeshSection()
-        : SectionLocalBox(ForceInit)
-        , bSectionVisible(true)
-        , SectionIndex(-1)
-    {}
-
-    /** Reset this section, clear all mesh info. */
-    void Reset()
-    {
-        ProcVertexBuffer.Empty();
-        SectionLocalBox.Init();
-        bSectionVisible = true;
-        SectionIndex = -1;
-    }
-
-public:
-    TArray<FVector> ProcVertexBuffer;
-    TArray<uint32> ProcIndexBuffer;
-
-    FBox SectionLocalBox;
-    bool bSectionVisible;
-    int32 SectionIndex;
-};
 
 ULineMeshComponent::ULineMeshComponent(const FObjectInitializer& ObjectInitializer)
 : Super(ObjectInitializer)
@@ -83,9 +55,11 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
 
     CreateOrUpdateMaterial(SectionIndex, Color);
 
-    UpdateLocalBounds(); // Update overall bounds
-
-	PendingSections.Enqueue(NewSection);
+    // Enqueue command to send to render thread
+    FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
+    
+    MarkRenderTransformDirty();  // Need to send new bounds to render thread
 }
 
 void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color)
@@ -174,8 +148,8 @@ int32 ULineMeshComponent::GetNumLines() const
 
 void ULineMeshComponent::UpdateLocalBounds()
 {
-    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
-    LineMeshSceneProxy->UpdateLocalBounds();
+    // FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    // LineMeshSceneProxy->UpdateLocalBounds();
     
     // Update global bounds
 	UpdateBounds();
@@ -197,7 +171,7 @@ UMaterialInterface* ULineMeshComponent::GetMaterial(int32 ElementIndex) const
         return SectionMaterials[ElementIndex];
     }
     
-    return Material;
+    return nullptr;
 }
 
 void ULineMeshComponent::CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color)

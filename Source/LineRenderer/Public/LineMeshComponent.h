@@ -69,9 +69,6 @@ private:
     UPROPERTY()
     TMap<int32, UMaterialInstanceDynamic*> SectionMaterials;
 
-    /** Pending line mesh sections */
-    TQueue<TSharedPtr<FLineMeshSection>> PendingSections;
-
     friend class FLineMeshSceneProxy;
 };
 

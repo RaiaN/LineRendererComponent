@@ -18,6 +18,7 @@
 class FLineMeshProxySection;
 class ULineMeshComponent;
 class FLineMeshSectionUpdateData;
+struct FLineMeshSection;
 
 
 /**
@@ -43,7 +44,7 @@ public:
 
 	SIZE_T GetTypeHash() const override;
 
-	/** Called on render thread to assign new dynamic data */
+	void AddNewSection_GameThread(TSharedPtr<FLineMeshSection> NewSection);
 	void UpdateSection_RenderThread(TSharedPtr<FLineMeshSectionUpdateData> SectionData);
 
 	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
@@ -69,5 +70,5 @@ private:
 	FMaterialRelevance MaterialRelevance;
 	FBoxSphereBounds LocalBounds;
 
-	mutable TMap<int32, TSharedPtr<FLineMeshProxySection>> Sections;
+	TMap<int32, TSharedPtr<FLineMeshProxySection>> Sections;
 };
