@@ -47,7 +47,7 @@ public:
 FLineMeshSceneProxy::FLineMeshSceneProxy(ULineMeshComponent* InComponent)
 : FPrimitiveSceneProxy(InComponent), Component(InComponent), MaterialRelevance(Component->GetMaterialRelevance(GetScene().GetFeatureLevel()))
 {
-
+    
 }
 
 FLineMeshSceneProxy::~FLineMeshSceneProxy()
@@ -163,7 +163,7 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
         BeginInitResource(&NewSection->IndexBuffer);
 
         // Grab material
-        NewSection->Material = Component->GetMaterial(SrcSection->SectionIndex);
+        NewSection->Material = SrcSection->Material;
 
         // Copy visibility info
         // Flip visible flag until render resources are initialized
@@ -192,13 +192,6 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 
             SetUsedMaterialForVerification(UsedMaterials);
 #endif
-
-            // release resources when overriding existing section 
-            /*if (Sections.Contains(SrcSectionIndex))
-            {
-                ClearMeshSection(SrcSectionIndex);
-                Sections.Remove(SrcSectionIndex);
-            }*/
 
             // section is ready
             Sections.Add(SrcSectionIndex, NewSection);
@@ -346,7 +339,8 @@ void FLineMeshSceneProxy::UpdateLocalBounds()
         LocalBox += Section->SectionLocalBox;
     }
 
-    LocalBounds = LocalBox.IsValid ? FBoxSphereBounds(LocalBox) : FBoxSphereBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0); // fallback to reset box sphere bounds
+    ensure (LocalBox.IsValid);
+    LocalBounds = FBoxSphereBounds(LocalBox);
 }
 
 FBoxSphereBounds FLineMeshSceneProxy::GetLocalBounds() const

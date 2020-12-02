@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 
+class UMaterialInterface;
+
 /**
 /** Line section description */
 struct FLineMeshSection
@@ -31,4 +33,6 @@ public:
     FBox SectionLocalBox;
     bool bSectionVisible;
     int32 SectionIndex;
+
+    UMaterialInterface* Material;
 };

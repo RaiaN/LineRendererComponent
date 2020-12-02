@@ -52,14 +52,14 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
 
 	NewSection->SectionIndex = SectionIndex;
     NewSection->SectionLocalBox = FBox(Vertices);
-
-    CreateOrUpdateMaterial(SectionIndex, Color);
+    NewSection->Material = CreateOrUpdateMaterial(SectionIndex, Color);
 
     // Enqueue command to send to render thread
     FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
     ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
     
-    MarkRenderTransformDirty();  // Need to send new bounds to render thread
+    UpdateLocalBounds();
+    MarkRenderTransformDirty();
 }
 
 void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color)
@@ -97,6 +97,8 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& V
         SectionData->IndexBuffer[2 * TriInd + 1] = TriInd + 1;
     }
 
+    SectionData->Material = CreateOrUpdateMaterial(SectionIndex, Color);
+
     // Enqueue command to send to render thread
     FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
     ENQUEUE_RENDER_COMMAND(FLineMeshSectionUpdate)(
@@ -106,10 +108,8 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& V
         }
     );
 
-    CreateOrUpdateMaterial(SectionIndex, Color);
-
-    UpdateLocalBounds();		 // Update overall bounds
-    MarkRenderTransformDirty();  // Need to send new bounds to render thread
+    UpdateLocalBounds();
+    MarkRenderTransformDirty();
 }
 
 void ULineMeshComponent::RemoveLine(int32 SectionIndex)
@@ -174,7 +174,7 @@ UMaterialInterface* ULineMeshComponent::GetMaterial(int32 ElementIndex) const
     return nullptr;
 }
 
-void ULineMeshComponent::CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color)
+UMaterialInterface* ULineMeshComponent::CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color)
 {
     if (!SectionMaterials.Contains(SectionIndex))
     {
@@ -185,6 +185,8 @@ void ULineMeshComponent::CreateOrUpdateMaterial(int32 SectionIndex, const FLinea
 
     UMaterialInstanceDynamic* MI = SectionMaterials[SectionIndex];
     MI->SetVectorParameterValue(TEXT("LineColor"), Color);
+
+    return MI;
 }
 
 FBoxSphereBounds ULineMeshComponent::CalcBounds(const FTransform& LocalToWorld) const

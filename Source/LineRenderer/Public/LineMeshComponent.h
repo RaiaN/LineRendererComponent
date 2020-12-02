@@ -56,7 +56,7 @@ public:
 	UMaterialInterface* Material;
 
 private: 
-    void CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color);
+	UMaterialInterface* CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color);
 
 	//~ Begin USceneComponent Interface.
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;

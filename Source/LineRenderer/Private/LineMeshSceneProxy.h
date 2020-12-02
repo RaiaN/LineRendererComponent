@@ -19,6 +19,7 @@ class FLineMeshProxySection;
 class ULineMeshComponent;
 class FLineMeshSectionUpdateData;
 struct FLineMeshSection;
+class UMaterialInterface;
 
 
 /**
@@ -32,6 +33,7 @@ public:
 	TArray<FVector> VertexBuffer;
 	TArray<uint32> IndexBuffer;
 	FBox SectionLocalBox;
+	UMaterialInterface* Material;
 };
 
 
