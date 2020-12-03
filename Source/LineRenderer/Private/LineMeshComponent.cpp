@@ -57,9 +57,6 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
     // Enqueue command to send to render thread
     FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
     ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
-    
-    UpdateLocalBounds();
-    MarkRenderTransformDirty();
 }
 
 void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color)
@@ -107,9 +104,6 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& V
             ProcMeshSceneProxy->UpdateSection_RenderThread(SectionData);
         }
     );
-
-    UpdateLocalBounds();
-    MarkRenderTransformDirty();
 }
 
 void ULineMeshComponent::RemoveLine(int32 SectionIndex)
@@ -148,8 +142,8 @@ int32 ULineMeshComponent::GetNumLines() const
 
 void ULineMeshComponent::UpdateLocalBounds()
 {
-    // FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
-    // LineMeshSceneProxy->UpdateLocalBounds();
+    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    LineMeshSceneProxy->UpdateLocalBounds();
     
     // Update global bounds
 	UpdateBounds();

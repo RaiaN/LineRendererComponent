@@ -166,7 +166,6 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
         NewSection->Material = SrcSection->Material;
 
         // Copy visibility info
-        // Flip visible flag until render resources are initialized
         NewSection->bSectionVisible = SrcSection->bSectionVisible;
         NewSection->SectionLocalBox = SrcSection->SectionLocalBox;
     }
@@ -193,10 +192,15 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             SetUsedMaterialForVerification(UsedMaterials);
 #endif
 
-            // section is ready
             Sections.Add(SrcSectionIndex, NewSection);
 
-            UpdateLocalBounds();
+            AsyncTask(
+                ENamedThreads::GameThread, 
+                [this]()
+                {
+                    Component->UpdateLocalBounds();
+                }
+            );
 
             NewSection->bInitialized = true;
         }
@@ -208,6 +212,7 @@ void FLineMeshSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineMeshSection
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionRT);
 
     check (IsInRenderingThread());
+
     check (SectionData.IsValid());
 
     if (!Sections.Contains(SectionData->SectionIndex))
@@ -249,6 +254,14 @@ void FLineMeshSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineMeshSection
 
         Section->SectionLocalBox = SectionData->SectionLocalBox;
     }
+
+    AsyncTask(
+        ENamedThreads::GameThread,
+        [this]()
+        {
+            Component->UpdateLocalBounds();
+        }
+    );
 }
 
 bool FLineMeshSceneProxy::CanBeOccluded() const
@@ -333,7 +346,7 @@ void FLineMeshSceneProxy::UpdateLocalBounds()
 {
     FBox LocalBox(ForceInit);
 
-    for (TTuple<int32, TSharedPtr<FLineMeshProxySection>> KeyValueIter : Sections)
+    for (const TTuple<int32, TSharedPtr<FLineMeshProxySection>>& KeyValueIter : Sections)
     {
         TSharedPtr<FLineMeshProxySection> Section = KeyValueIter.Value;
         LocalBox += Section->SectionLocalBox;
