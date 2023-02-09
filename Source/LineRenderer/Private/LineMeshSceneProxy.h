@@ -30,9 +30,9 @@ class FLineMeshSectionUpdateData
 {
 public:
 	int32 SectionIndex;
-	TArray<FVector> VertexBuffer;
+	TArray<FVector3f> VertexBuffer;
 	TArray<uint32> IndexBuffer;
-	FBox SectionLocalBox;
+	FBox3f SectionLocalBox;
 	UMaterialInterface* Material;
 };
 
@@ -70,7 +70,7 @@ public:
 private:
 	ULineMeshComponent* Component;
 	FMaterialRelevance MaterialRelevance;
-	FBoxSphereBounds LocalBounds;
+	FBoxSphereBounds3f LocalBounds;
 
 	TMap<int32, TSharedPtr<FLineMeshProxySection>> Sections;
 };

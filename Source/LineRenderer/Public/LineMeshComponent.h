@@ -21,10 +21,10 @@ public:
 	ULineMeshComponent(const FObjectInitializer& ObjectInitializer);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color);
+	void CreateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color);
+	void UpdateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	void RemoveLine(int32 SectionIndex);

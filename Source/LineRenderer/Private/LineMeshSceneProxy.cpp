@@ -31,7 +31,7 @@ public:
     /** Whether this section is currently visible */
     bool bSectionVisible;
     /** Section bounding box */
-    FBox SectionLocalBox;
+    FBox3f SectionLocalBox;
     /** Whether this section is initialized i.e. render resources created */
     bool bInitialized;
 
@@ -154,7 +154,9 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
     TSharedPtr<FLineMeshProxySection> NewSection(MakeShareable(new FLineMeshProxySection(GetScene().GetFeatureLevel())));
     {
         NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 2, true);
-        NewSection->VertexBuffers.PositionVertexBuffer.Init(SrcSection->ProcVertexBuffer, true);
+
+        TArray<FVector3f> InVertexBuffer(MoveTemp(SrcSection->ProcVertexBuffer));
+        NewSection->VertexBuffers.PositionVertexBuffer.Init(InVertexBuffer, true);
         NewSection->IndexBuffer.SetIndices(SrcSection->ProcIndexBuffer, EIndexBufferStride::Force16Bit);
 
         // Enqueue initialization of render resource
@@ -239,17 +241,17 @@ void FLineMeshSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineMeshSection
         // update vertex buffer
         {
             FPositionVertexBuffer& SrcBuffer = Section->VertexBuffers.PositionVertexBuffer;
-            void* DstBuffer = RHILockVertexBuffer(SrcBuffer.VertexBufferRHI, 0, SrcBuffer.GetNumVertices() * SrcBuffer.GetStride(), RLM_WriteOnly);
+            void* DstBuffer = RHILockBuffer(SrcBuffer.VertexBufferRHI, 0, SrcBuffer.GetNumVertices() * SrcBuffer.GetStride(), RLM_WriteOnly);
             FMemory::Memcpy(DstBuffer, SrcBuffer.GetVertexData(), SrcBuffer.GetNumVertices() * SrcBuffer.GetStride());
-            RHIUnlockVertexBuffer(SrcBuffer.VertexBufferRHI);
+            RHIUnlockBuffer(SrcBuffer.VertexBufferRHI);
         }
 
         // update index buffer
         {
             FRawStaticIndexBuffer& SrcBuffer = Section->IndexBuffer;
-            void* DstBuffer = RHILockIndexBuffer(SrcBuffer.IndexBufferRHI, 0, SrcBuffer.GetIndexDataSize(), RLM_WriteOnly);
+            void* DstBuffer = RHILockBuffer(SrcBuffer.IndexBufferRHI, 0, SrcBuffer.GetIndexDataSize(), RLM_WriteOnly);
             FMemory::Memcpy(DstBuffer, (uint8*)SrcBuffer.AccessStream16(), SrcBuffer.GetIndexDataSize());
-            RHIUnlockIndexBuffer(SrcBuffer.IndexBufferRHI);
+            RHIUnlockBuffer(SrcBuffer.IndexBufferRHI);
         }
 
         Section->SectionLocalBox = SectionData->SectionLocalBox;
@@ -344,7 +346,7 @@ bool FLineMeshSceneProxy::IsMeshSectionVisible(int32 SectionIndex) const
 
 void FLineMeshSceneProxy::UpdateLocalBounds()
 {
-    FBox LocalBox(ForceInit);
+    FBox3f LocalBox(ForceInit);
 
     for (const TTuple<int32, TSharedPtr<FLineMeshProxySection>>& KeyValueIter : Sections)
     {
@@ -353,10 +355,10 @@ void FLineMeshSceneProxy::UpdateLocalBounds()
     }
 
     ensure (LocalBox.IsValid);
-    LocalBounds = FBoxSphereBounds(LocalBox);
+    LocalBounds = FBoxSphereBounds3f(LocalBox);
 }
 
 FBoxSphereBounds FLineMeshSceneProxy::GetLocalBounds() const
 {
-    return LocalBounds;
+    return FBoxSphereBounds(LocalBounds);
 }

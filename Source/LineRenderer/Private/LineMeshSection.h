@@ -27,10 +27,10 @@ public:
     }
 
 public:
-    TArray<FVector> ProcVertexBuffer;
+    TArray<FVector3f> ProcVertexBuffer;
     TArray<uint32> ProcIndexBuffer;
 
-    FBox SectionLocalBox;
+    FBox3f SectionLocalBox;
     bool bSectionVisible;
     int32 SectionIndex;
 

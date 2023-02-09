@@ -19,9 +19,11 @@ ULineMeshComponent::ULineMeshComponent(const FObjectInitializer& ObjectInitializ
 {
 }
 
-void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color)
+void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateMeshSection);
+
+    TArray<FVector3f> Vertices(InVertices);
 
     TSharedPtr<FLineMeshSection> NewSection(MakeShareable(new FLineMeshSection));
 
@@ -51,7 +53,7 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
 	}
 
 	NewSection->SectionIndex = SectionIndex;
-    NewSection->SectionLocalBox = FBox(Vertices);
+    NewSection->SectionLocalBox = FBox3f(Vertices);
     NewSection->Material = CreateOrUpdateMaterial(SectionIndex, Color);
 
     // Enqueue command to send to render thread
@@ -59,8 +61,10 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
     ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
 }
 
-void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color)
+void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color)
 {
+    TArray<FVector3f> Vertices(InVertices);
+
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionGT);
     FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
 
@@ -72,13 +76,13 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& V
     // Recreate line if mismatch in number of vertices
     if (Vertices.Num() != LineMeshSceneProxy->GetNumPointsInSection(SectionIndex))
     {
-        CreateLine(SectionIndex, Vertices, Color);
+        CreateLine(SectionIndex, InVertices, Color);
         return;
     }
 
     TSharedPtr<FLineMeshSectionUpdateData> SectionData(MakeShareable(new FLineMeshSectionUpdateData));
     SectionData->SectionIndex = SectionIndex;
-    SectionData->SectionLocalBox = FBox(Vertices);
+    SectionData->SectionLocalBox = FBox3f(Vertices);
     SectionData->VertexBuffer = Vertices;
 
     if (Vertices.Num() - 1 > 0)
@@ -187,13 +191,13 @@ FBoxSphereBounds ULineMeshComponent::CalcBounds(const FTransform& LocalToWorld) 
 {
     FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
 
-    FBoxSphereBounds LocalBounds = FBoxSphereBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0);
+    FBoxSphereBounds LocalBounds(FBoxSphereBounds3f(FVector3f(0, 0, 0), FVector3f(0, 0, 0), 0));
     if (LineMeshSceneProxy != nullptr)
     {
         LocalBounds = LineMeshSceneProxy->GetLocalBounds();
     }
 
-    FBoxSphereBounds Ret(LocalBounds.TransformBy(LocalToWorld));
+    FBoxSphereBounds Ret(FBoxSphereBounds(LocalBounds).TransformBy(LocalToWorld));
 
     Ret.BoxExtent *= BoundsScale;
     Ret.SphereRadius *= BoundsScale;
