@@ -1,4 +1,4 @@
-Line Renderer Component
+**Line Renderer Component**
 
 This Unreal Engine 4 plugin provides a custom line renderer component that allows you to easily draw lines with thickness in your game or simulation.
 
