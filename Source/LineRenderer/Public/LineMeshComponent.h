@@ -21,7 +21,7 @@ public:
 	ULineMeshComponent(const FObjectInitializer& ObjectInitializer);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void CreateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color);
+	void CreateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color, float Thickness);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	void UpdateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color);
@@ -44,19 +44,14 @@ public:
 
 	//~ Begin UPrimitiveComponent Interface.
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
-	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	//~ End UPrimitiveComponent Interface.
 
-	//~ Begin UMeshComponent Interface.
-	virtual UMaterialInterface* GetMaterial(int32 ElementIndex) const override;
-	//~ End UMeshComponent Interface.
-
 public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	UMaterialInterface* Material;
+    // UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	// UMaterialInterface* Material;
 
 private: 
-	UMaterialInterface* CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color);
+	FLinearColor CreateOrUpdateSectionColor(int32 SectionIndex, const FLinearColor& Color);
 
 	//~ Begin USceneComponent Interface.
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
@@ -67,7 +62,7 @@ private:
 
 private:
     UPROPERTY()
-    TMap<int32, UMaterialInstanceDynamic*> SectionMaterials;
+    TMap<int32, FLinearColor> SectionColors;
 
     friend class FLineMeshSceneProxy;
 };

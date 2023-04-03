@@ -4,57 +4,76 @@
 #include "LineMeshSceneProxy.h"
 #include "LineMeshSection.h"
 
-/*DECLARE_CYCLE_STAT(TEXT("Create ProcMesh Proxy"), STAT_ProcMesh_CreateSceneProxy, STATGROUP_ProceduralMesh);
-DECLARE_CYCLE_STAT(TEXT("Create Mesh Section"), STAT_ProcMesh_CreateMeshSection, STATGROUP_ProceduralMesh);
-DECLARE_CYCLE_STAT(TEXT("UpdateSection GT"), STAT_ProcMesh_UpdateSectionGT, STATGROUP_ProceduralMesh);
-DECLARE_CYCLE_STAT(TEXT("UpdateSection RT"), STAT_ProcMesh_UpdateSectionRT, STATGROUP_ProceduralMesh);
-DECLARE_CYCLE_STAT(TEXT("Get ProcMesh Elements"), STAT_ProcMesh_GetMeshElements, STATGROUP_ProceduralMesh);
-DECLARE_CYCLE_STAT(TEXT("Update Collision"), STAT_ProcMesh_UpdateCollision, STATGROUP_ProceduralMesh);*/
 
-
-DEFINE_LOG_CATEGORY_STATIC(LogLineRendererComponent, Log, All);
+DEFINE_LOG_CATEGORY_STATIC(LogLineMeshComponent, Log, All);
 
 ULineMeshComponent::ULineMeshComponent(const FObjectInitializer& ObjectInitializer)
 : Super(ObjectInitializer)
 {
 }
 
-void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color)
+void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color, float Thickness)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateMeshSection);
 
     TArray<FVector3f> Vertices(InVertices);
 
+    int32 IndexOffset = 0;
+
     TSharedPtr<FLineMeshSection> NewSection(MakeShareable(new FLineMeshSection));
-
-    // Copy data to vertex buffer
-    const int32 NumVerts = Vertices.Num();
-    NewSection->ProcVertexBuffer.Reset();
-    NewSection->ProcVertexBuffer.Reserve(NumVerts);
-
-    for (int32 VertIdx = 0; VertIdx < NumVerts; VertIdx++)
     {
-		NewSection->ProcVertexBuffer.Add(Vertices[VertIdx]);
-		NewSection->SectionLocalBox += Vertices[VertIdx];
+        const int32 NumVerts = (Vertices.Num() - 1) * 6;
+
+        NewSection->ProcVertexBuffer.Reset();
+        NewSection->ProcVertexBuffer.Reserve(NumVerts);
+        NewSection->ProcIndexBuffer.Reset();
+        NewSection->ProcIndexBuffer.Reserve(NumVerts * 3);
     }
 
-	if (Vertices.Num() - 1 > 0)
-	{
-		NewSection->ProcIndexBuffer.Reset();
-		NewSection->ProcIndexBuffer.SetNumZeroed(2 * (Vertices.Num() - 1) + 1);
-	}
+    for (int32 Ind = 0; Ind < Vertices.Num() - 1; ++Ind)
+    {
+        const FVector3f& StartPoint = Vertices[Ind];
+        const FVector3f& EndPoint = Vertices[Ind+1];
 
-	const int32 NumTris = Vertices.Num() - 1;
+        FVector3f Direction = (EndPoint - StartPoint).GetSafeNormal();
+        float Length = (EndPoint - StartPoint).Size();
 
-	for (int32 TriInd = 0; TriInd < NumTris; ++TriInd)
-	{
-		NewSection->ProcIndexBuffer[2 * TriInd] = TriInd;
-		NewSection->ProcIndexBuffer[2 * TriInd + 1] = TriInd + 1;
-	}
+        FVector3f Tangent = FVector3f::CrossProduct(Direction, FVector3f::UpVector).GetSafeNormal();
+        FVector3f Normal = FVector3f::CrossProduct(Direction, Tangent).GetSafeNormal();
+
+        FVector3f StartVertex = StartPoint - Normal * Thickness / 2;
+        FVector3f EndVertex = EndPoint + Normal * Thickness / 2;
+
+        FVector3f Corner1 = StartVertex + Tangent * Thickness / 2;
+        FVector3f Corner2 = StartVertex - Tangent * Thickness / 2;
+        FVector3f Corner3 = EndVertex + Tangent * Thickness / 2;
+        FVector3f Corner4 = EndVertex - Tangent * Thickness / 2;
+
+        TArray<FVector3f> SegmentVertices{
+            Corner1, StartVertex, Corner2, // Corner vertices
+            Corner3, EndVertex, Corner4    // Start and end vertices
+        };
+
+        // Define the index buffer for the line with thickness
+        TArray<int32> SegmentIndices{
+            IndexOffset, IndexOffset + 3, IndexOffset + 1,
+            IndexOffset + 1, IndexOffset + 3, IndexOffset + 4,
+            IndexOffset + 1, IndexOffset + 4, IndexOffset + 2,
+            IndexOffset + 2, IndexOffset + 4, IndexOffset + 5,
+        };
+
+        IndexOffset += 3;
+
+        NewSection->ProcVertexBuffer.Append(SegmentVertices);
+        NewSection->ProcIndexBuffer.Append(SegmentIndices);
+    }
+
+    NewSection->MaxVertexIndex = Vertices.Num() * 3 - 1;
 
 	NewSection->SectionIndex = SectionIndex;
     NewSection->SectionLocalBox = FBox3f(Vertices);
-    NewSection->Material = CreateOrUpdateMaterial(SectionIndex, Color);
+    NewSection->SectionLocalBox = NewSection->SectionLocalBox.ExpandBy(Thickness);
+    NewSection->Color = CreateOrUpdateSectionColor(SectionIndex, Color);
 
     // Enqueue command to send to render thread
     FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
@@ -76,7 +95,7 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& I
     // Recreate line if mismatch in number of vertices
     if (Vertices.Num() != LineMeshSceneProxy->GetNumPointsInSection(SectionIndex))
     {
-        CreateLine(SectionIndex, InVertices, Color);
+        CreateLine(SectionIndex, InVertices, Color, 15.0);
         return;
     }
 
@@ -98,7 +117,7 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& I
         SectionData->IndexBuffer[2 * TriInd + 1] = TriInd + 1;
     }
 
-    SectionData->Material = CreateOrUpdateMaterial(SectionIndex, Color);
+    SectionData->Color = CreateOrUpdateSectionColor(SectionIndex, Color);
 
     // Enqueue command to send to render thread
     FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
@@ -115,7 +134,7 @@ void ULineMeshComponent::RemoveLine(int32 SectionIndex)
 	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
 	LineMeshSceneProxy->ClearMeshSection(SectionIndex);
 
-    SectionMaterials.Remove(SectionIndex);
+    SectionColors.Remove(SectionIndex);
 }
 
 void ULineMeshComponent::RemoveAllLines()
@@ -123,7 +142,7 @@ void ULineMeshComponent::RemoveAllLines()
 	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
 	LineMeshSceneProxy->ClearAllMeshSections();
 
-    SectionMaterials.Empty();
+    SectionColors.Empty();
 }
 
 void ULineMeshComponent::SetLineVisible(int32 SectionIndex, bool bNewVisibility)
@@ -162,29 +181,14 @@ FPrimitiveSceneProxy* ULineMeshComponent::CreateSceneProxy()
 	return new FLineMeshSceneProxy(this);
 }
 
-UMaterialInterface* ULineMeshComponent::GetMaterial(int32 ElementIndex) const
+FLinearColor ULineMeshComponent::CreateOrUpdateSectionColor(int32 SectionIndex, const FLinearColor& Color)
 {
-    if (SectionMaterials.Contains(ElementIndex))
+    if (!SectionColors.Contains(SectionIndex))
     {
-        return SectionMaterials[ElementIndex];
-    }
-    
-    return nullptr;
-}
-
-UMaterialInterface* ULineMeshComponent::CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color)
-{
-    if (!SectionMaterials.Contains(SectionIndex))
-    {
-        UMaterialInstanceDynamic* MI = UMaterialInstanceDynamic::Create(Material, Material);
-        SectionMaterials.Add(SectionIndex, MI);
-        OverrideMaterials.Add(MI);
+        SectionColors.Add(SectionIndex, Color);
     }
 
-    UMaterialInstanceDynamic* MI = SectionMaterials[SectionIndex];
-    MI->SetVectorParameterValue(TEXT("LineColor"), Color);
-
-    return MI;
+    return SectionColors[SectionIndex];
 }
 
 FBoxSphereBounds ULineMeshComponent::CalcBounds(const FTransform& LocalToWorld) const
@@ -203,16 +207,4 @@ FBoxSphereBounds ULineMeshComponent::CalcBounds(const FTransform& LocalToWorld) 
     Ret.SphereRadius *= BoundsScale;
 
     return Ret;
-}
-
-void ULineMeshComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /*= false*/) const
-{
-    Super::GetUsedMaterials(OutMaterials, false);
-
-	OutMaterials.Add(Material);
-
-    for (TTuple<int32, UMaterialInstanceDynamic*> KeyValuePair : SectionMaterials)
-    {
-        OutMaterials.Add(KeyValuePair.Value);
-    }
 }

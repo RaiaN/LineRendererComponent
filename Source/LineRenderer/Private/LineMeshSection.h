@@ -15,6 +15,8 @@ public:
         : SectionLocalBox(ForceInit)
         , bSectionVisible(true)
         , SectionIndex(-1)
+        , MaxVertexIndex(-1)
+        , Color(FColor::Red)
     {}
 
     /** Reset this section, clear all mesh info. */
@@ -24,6 +26,8 @@ public:
         SectionLocalBox.Init();
         bSectionVisible = true;
         SectionIndex = -1;
+        MaxVertexIndex = -1;
+        Color = FColor::Red;
     }
 
 public:
@@ -33,6 +37,7 @@ public:
     FBox3f SectionLocalBox;
     bool bSectionVisible;
     int32 SectionIndex;
+    int32 MaxVertexIndex;
 
-    UMaterialInterface* Material;
+    FLinearColor Color;
 };

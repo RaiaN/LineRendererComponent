@@ -1,6 +1,7 @@
 // Copyright Peter Leontev
 
 #include "LineMeshSceneProxy.h"
+#include "MaterialShared.h"
 #include "LineMeshComponent.h"
 #include "LineMeshSection.h"
 
@@ -20,8 +21,6 @@ public:
     }
 
 public:
-    /** Material applied to this section */
-    class UMaterialInterface* Material;
     /** Vertex buffer for this section */
     FStaticMeshVertexBuffers VertexBuffers;
     /** Index buffer for this section */
@@ -34,10 +33,15 @@ public:
     FBox3f SectionLocalBox;
     /** Whether this section is initialized i.e. render resources created */
     bool bInitialized;
+    /** Max vertex index */
+    int32 MaxVertexIndex;
+    /** Section index */
+    int32 SectionIndex;
+    /** Section Color */
+    FLinearColor Color;
 
     FLineMeshProxySection(ERHIFeatureLevel::Type InFeatureLevel)
-        : Material(NULL)
-        , VertexFactory(InFeatureLevel, "FLineMeshProxySection")
+        : VertexFactory(InFeatureLevel, "FLineMeshProxySection")
         , bSectionVisible(true)
         , bInitialized(false)
     {}
@@ -85,7 +89,10 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
 
         if (Section.IsValid() && Section->bInitialized && Section->bSectionVisible)
         {
-            FMaterialRenderProxy* MaterialProxy = Section->Material->GetRenderProxy();
+            // FMaterialRenderProxy* MaterialProxy = Section->Material->GetRenderProxy();
+
+            FMaterialRenderProxy* const MaterialProxy = new FColoredMaterialRenderProxy(GEngine->WireframeMaterial->GetRenderProxy(), Section->Color);
+            Collector.RegisterOneFrameMaterialProxy(MaterialProxy);
 
             // For each view..
             for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
@@ -97,9 +104,10 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     FMeshBatch& Mesh = Collector.AllocateMesh();
                     Mesh.VertexFactory = &Section->VertexFactory;
                     Mesh.MaterialRenderProxy = MaterialProxy;
-                    Mesh.ReverseCulling = IsLocalToWorldDeterminantNegative();
-                    Mesh.Type = PT_LineList;
-                    Mesh.DepthPriorityGroup = SDPG_Foreground;
+                    Mesh.ReverseCulling = !IsLocalToWorldDeterminantNegative();
+                    Mesh.bDisableBackfaceCulling = true;
+                    Mesh.Type = PT_TriangleList;
+                    Mesh.DepthPriorityGroup = SDPG_World;
                     Mesh.bCanApplyViewModeOverrides = false;
 
                     FMeshBatchElement& BatchElement = Mesh.Elements[0];
@@ -116,9 +124,13 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
 
                     BatchElement.FirstIndex = 0;
-                    BatchElement.NumPrimitives = Section->IndexBuffer.GetNumIndices() / 2;
+                    BatchElement.NumPrimitives = Section->IndexBuffer.GetNumIndices() / 3;
                     BatchElement.MinVertexIndex = 0;
-                    BatchElement.MaxVertexIndex = Section->VertexBuffers.PositionVertexBuffer.GetNumVertices() - 1;
+                    BatchElement.MaxVertexIndex = Section->MaxVertexIndex;
+
+#if ENABLE_DRAW_DEBUG
+                    BatchElement.VisualizeElementIndex = Section->SectionIndex;
+#endif
                    
                     Collector.AddMesh(ViewIndex, Mesh);
                 }
@@ -164,12 +176,14 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
         BeginInitResource(&NewSection->VertexBuffers.StaticMeshVertexBuffer);
         BeginInitResource(&NewSection->IndexBuffer);
 
-        // Grab material
-        NewSection->Material = SrcSection->Material;
-
         // Copy visibility info
         NewSection->bSectionVisible = SrcSection->bSectionVisible;
         NewSection->SectionLocalBox = SrcSection->SectionLocalBox;
+
+        NewSection->MaxVertexIndex = SrcSection->MaxVertexIndex;
+        NewSection->SectionIndex = SrcSectionIndex;
+
+        NewSection->Color = SrcSection->Color;
     }
 
     ENQUEUE_RENDER_COMMAND(LineMeshVertexBuffersInit)(
