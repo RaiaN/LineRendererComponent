@@ -59,7 +59,7 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
 
 void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color)
 {
-    TArray<FVector3f> Vertices(InVertices);
+    /*TArray<FVector3f> Vertices(InVertices);
 
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionGT);
     FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
@@ -103,7 +103,7 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& I
         {
             ProcMeshSceneProxy->UpdateSection_RenderThread(SectionData);
         }
-    );
+    );*/
 }
 
 void ULineMeshComponent::RemoveLine(int32 SectionIndex)

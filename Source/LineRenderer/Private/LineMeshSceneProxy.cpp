@@ -6,6 +6,8 @@
 #include "LineMeshSection.h"
 #include "RHICommandList.h"
 
+PRAGMA_DISABLE_OPTIMIZATION
+
 /** Class representing a single section of the proc mesh */
 class FLineMeshProxySection
 {
@@ -104,13 +106,12 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     // Draw the mesh.
                     FMeshBatch& Mesh = Collector.AllocateMesh();
                     Mesh.VertexFactory = &Section->VertexFactory;
-                    // Mesh.MaterialRenderProxy = MaterialProxy;
+                    Mesh.MaterialRenderProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy();
                     Mesh.ReverseCulling = !IsLocalToWorldDeterminantNegative();
                     Mesh.bDisableBackfaceCulling = true;
                     Mesh.Type = PT_TriangleList;
                     Mesh.DepthPriorityGroup = SDPG_World;
                     Mesh.bCanApplyViewModeOverrides = false;
-
 
                     const FMatrix& WorldToClip = View->ViewMatrices.GetViewProjectionMatrix();
                     const FMatrix& ClipToWorld = View->ViewMatrices.GetInvViewProjectionMatrix();
@@ -135,10 +136,12 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     const FVector WorldPointXE = CameraX * EndThickness * 0.5f;
                     const FVector WorldPointYE = CameraY * EndThickness * 0.5f;
 
+                    const int32 VertexBufferRHIBytes = sizeof(FSimpleElementVertex) * 8 * 3 * Section->Lines.Num();
+
                     FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"));
                     // TODO: Make sure correct structs are used
-                    FBufferRHIRef VertexBufferRHI = RHICreateVertexBuffer(sizeof(FSimpleElementVertex) * 8 * 3 * Section->Lines.Num(), BUF_Volatile, CreateInfo);
-                    void* ThickVertexData = RHILockBuffer(VertexBufferRHI, 0, sizeof(FSimpleElementVertex) * 8 * 3 * Section->Lines.Num(), RLM_WriteOnly);
+                    FBufferRHIRef VertexBufferRHI = RHICreateVertexBuffer(VertexBufferRHIBytes, BUF_Volatile, CreateInfo);
+                    void* ThickVertexData = RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
                     FSimpleElementVertex* ThickVertices = (FSimpleElementVertex*)ThickVertexData;
                     check(ThickVertices);
 
@@ -232,17 +235,68 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 {
     check(IsInGameThread());
 
-    const int32 SrcSectionIndex = 0;
+    const int32 NumVerts = SrcSection->Lines.Num() * 24;
+
+    const int32 SrcSectionIndex = SrcSection->SectionIndex;
 
     TSharedPtr<FLineMeshProxySection> NewSection(MakeShareable(new FLineMeshProxySection(GetScene().GetFeatureLevel())));
     {
         NewSection->Lines = MoveTemp(SrcSection->Lines);
-
-        const int32 NumVerts = SrcSection->Lines.Num() * 24;
+        NewSection->MaxVertexIndex = NumVerts - 1;
+        NewSection->SectionIndex = SrcSectionIndex;
 
         NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 2, true);
         NewSection->VertexBuffers.PositionVertexBuffer.Init(NumVerts, true);
-        // NewSection->IndexBuffer.SetIndices(SrcSection->ProcIndexBuffer, EIndexBufferStride::Force16Bit);
+
+        TArray<uint32> IndexBuffer;
+
+        int32 VertexOffset = 0;
+        for (int32 LineIndex = 0; LineIndex < NewSection->Lines.Num(); ++LineIndex)
+        {
+            // Calculate the index offset for this line
+            int32 IndexOffset = LineIndex * 24; // Each line has 24 vertices
+
+            // First rectangle
+            IndexBuffer.Add(VertexOffset + 0 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 1 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 2 + IndexOffset);
+
+            IndexBuffer.Add(VertexOffset + 1 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 4 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 2 + IndexOffset);
+
+            // Second rectangle
+            IndexBuffer.Add(VertexOffset + 6 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 7 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 8 + IndexOffset);
+
+            IndexBuffer.Add(VertexOffset + 7 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 10 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 8 + IndexOffset);
+
+            // Third rectangle
+            IndexBuffer.Add(VertexOffset + 12 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 13 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 14 + IndexOffset);
+
+            IndexBuffer.Add(VertexOffset + 13 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 16 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 14 + IndexOffset);
+
+            // Fourth rectangle
+            IndexBuffer.Add(VertexOffset + 18 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 19 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 20 + IndexOffset);
+
+            IndexBuffer.Add(VertexOffset + 19 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 22 + IndexOffset);
+            IndexBuffer.Add(VertexOffset + 20 + IndexOffset);
+
+            // Increment the vertex offset for the next line
+            VertexOffset += 24;
+        }
+
+        NewSection->IndexBuffer.SetIndices(IndexBuffer, EIndexBufferStride::Force16Bit);
 
         // Enqueue initialization of render resource
         BeginInitResource(&NewSection->VertexBuffers.PositionVertexBuffer);
@@ -440,3 +494,5 @@ FBoxSphereBounds FLineMeshSceneProxy::GetLocalBounds() const
 {
     return FBoxSphereBounds(LocalBounds);
 }
+
+PRAGMA_ENABLE_OPTIMIZATION
