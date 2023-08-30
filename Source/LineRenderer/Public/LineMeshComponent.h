@@ -21,7 +21,10 @@ public:
 	ULineMeshComponent(const FObjectInitializer& ObjectInitializer);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void CreateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color, float Thickness);
+	void CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FColor& Color, float Thickness);
+
+	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
+	void CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FColor& Color, float Thickness);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	void UpdateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color);

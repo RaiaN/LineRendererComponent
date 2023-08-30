@@ -4,6 +4,7 @@
 #include "MaterialShared.h"
 #include "LineMeshComponent.h"
 #include "LineMeshSection.h"
+#include "RHICommandList.h"
 
 /** Class representing a single section of the proc mesh */
 class FLineMeshProxySection
@@ -21,6 +22,8 @@ public:
     }
 
 public:
+    TArray<FBatchedLine> Lines;
+
     /** Vertex buffer for this section */
     FStaticMeshVertexBuffers VertexBuffers;
     /** Index buffer for this section */
@@ -37,8 +40,6 @@ public:
     int32 MaxVertexIndex;
     /** Section index */
     int32 SectionIndex;
-    /** Section Color */
-    FLinearColor Color;
 
     FLineMeshProxySection(ERHIFeatureLevel::Type InFeatureLevel)
         : VertexFactory(InFeatureLevel, "FLineMeshProxySection")
@@ -91,8 +92,8 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
         {
             // FMaterialRenderProxy* MaterialProxy = Section->Material->GetRenderProxy();
 
-            FMaterialRenderProxy* const MaterialProxy = new FColoredMaterialRenderProxy(GEngine->WireframeMaterial->GetRenderProxy(), Section->Color);
-            Collector.RegisterOneFrameMaterialProxy(MaterialProxy);
+            // FMaterialRenderProxy* const MaterialProxy = new FColoredMaterialRenderProxy(GEngine->WireframeMaterial->GetRenderProxy(), Section->Color);
+            // Collector.RegisterOneFrameMaterialProxy(MaterialProxy);
 
             // For each view..
             for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
@@ -103,12 +104,85 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     // Draw the mesh.
                     FMeshBatch& Mesh = Collector.AllocateMesh();
                     Mesh.VertexFactory = &Section->VertexFactory;
-                    Mesh.MaterialRenderProxy = MaterialProxy;
+                    // Mesh.MaterialRenderProxy = MaterialProxy;
                     Mesh.ReverseCulling = !IsLocalToWorldDeterminantNegative();
                     Mesh.bDisableBackfaceCulling = true;
                     Mesh.Type = PT_TriangleList;
                     Mesh.DepthPriorityGroup = SDPG_World;
                     Mesh.bCanApplyViewModeOverrides = false;
+
+
+                    const FMatrix& WorldToClip = View->ViewMatrices.GetViewProjectionMatrix();
+                    const FMatrix& ClipToWorld = View->ViewMatrices.GetInvViewProjectionMatrix();
+                    const uint32 ViewportSizeX = View->UnscaledViewRect.Width();
+                    const uint32 ViewportSizeY = View->UnscaledViewRect.Height();
+
+                    FVector CameraX = ClipToWorld.TransformVector(FVector(1, 0, 0)).GetSafeNormal();
+                    FVector CameraY = ClipToWorld.TransformVector(FVector(0, 1, 0)).GetSafeNormal();
+                    FVector CameraZ = ClipToWorld.TransformVector(FVector(0, 0, 1)).GetSafeNormal();
+
+                    // TODO: Add this option to section!
+                    const float ScreenSpaceScaling = 1.0f; // Line.bScreenSpace ? 2.0f : 1.0f;
+                    const float Thickness = 1.0f;
+
+                    float OrthoZoomFactor = 1.0f;
+                    const float StartThickness = Thickness * ScreenSpaceScaling * OrthoZoomFactor;
+                    const float EndThickness = Thickness * ScreenSpaceScaling * OrthoZoomFactor;
+
+                    const FVector WorldPointXS = CameraX * StartThickness * 0.5f;
+                    const FVector WorldPointYS = CameraY * StartThickness * 0.5f;
+
+                    const FVector WorldPointXE = CameraX * EndThickness * 0.5f;
+                    const FVector WorldPointYE = CameraY * EndThickness * 0.5f;
+
+                    FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"));
+                    // TODO: Make sure correct structs are used
+                    FBufferRHIRef VertexBufferRHI = RHICreateVertexBuffer(sizeof(FSimpleElementVertex) * 8 * 3 * Section->Lines.Num(), BUF_Volatile, CreateInfo);
+                    void* ThickVertexData = RHILockBuffer(VertexBufferRHI, 0, sizeof(FSimpleElementVertex) * 8 * 3 * Section->Lines.Num(), RLM_WriteOnly);
+                    FSimpleElementVertex* ThickVertices = (FSimpleElementVertex*)ThickVertexData;
+                    check(ThickVertices);
+
+                    for (const FBatchedLine& Line : Section->Lines)
+                    {
+                        // Begin point
+                        ThickVertices[0] = FSimpleElementVertex(Line.Start + WorldPointXS - WorldPointYS, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0S
+                        ThickVertices[1] = FSimpleElementVertex(Line.Start + WorldPointXS + WorldPointYS, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1S
+                        ThickVertices[2] = FSimpleElementVertex(Line.Start - WorldPointXS - WorldPointYS, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2S
+
+                        ThickVertices[3] = FSimpleElementVertex(Line.Start + WorldPointXS + WorldPointYS, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1S
+                        ThickVertices[4] = FSimpleElementVertex(Line.Start - WorldPointXS - WorldPointYS, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2S
+                        ThickVertices[5] = FSimpleElementVertex(Line.Start - WorldPointXS + WorldPointYS, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3S
+
+                        // Ending point
+                        ThickVertices[0 + 6] = FSimpleElementVertex(Line.End + WorldPointXE - WorldPointYE, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0E
+                        ThickVertices[1 + 6] = FSimpleElementVertex(Line.End + WorldPointXE + WorldPointYE, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1E
+                        ThickVertices[2 + 6] = FSimpleElementVertex(Line.End - WorldPointXE - WorldPointYE, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2E
+
+                        ThickVertices[3 + 6] = FSimpleElementVertex(Line.End + WorldPointXE + WorldPointYE, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1E
+                        ThickVertices[4 + 6] = FSimpleElementVertex(Line.End - WorldPointXE - WorldPointYE, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2E
+                        ThickVertices[5 + 6] = FSimpleElementVertex(Line.End - WorldPointXE + WorldPointYE, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3E
+
+                        // First part of line
+                        ThickVertices[0 + 12] = FSimpleElementVertex(Line.Start - WorldPointXS - WorldPointYS, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2S
+                        ThickVertices[1 + 12] = FSimpleElementVertex(Line.Start + WorldPointXS + WorldPointYS, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1S
+                        ThickVertices[2 + 12] = FSimpleElementVertex(Line.End - WorldPointXE - WorldPointYE, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2E
+
+                        ThickVertices[3 + 12] = FSimpleElementVertex(Line.Start + WorldPointXS + WorldPointYS, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1S
+                        ThickVertices[4 + 12] = FSimpleElementVertex(Line.End + WorldPointXE + WorldPointYE, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1E
+                        ThickVertices[5 + 12] = FSimpleElementVertex(Line.End - WorldPointXE - WorldPointYE, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2E
+
+                        // Second part of line
+                        ThickVertices[0 + 18] = FSimpleElementVertex(Line.Start - WorldPointXS + WorldPointYS, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3S
+                        ThickVertices[1 + 18] = FSimpleElementVertex(Line.Start + WorldPointXS - WorldPointYS, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0S
+                        ThickVertices[2 + 18] = FSimpleElementVertex(Line.End - WorldPointXE + WorldPointYE, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3E
+
+                        ThickVertices[3 + 18] = FSimpleElementVertex(Line.Start + WorldPointXS - WorldPointYS, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0S
+                        ThickVertices[4 + 18] = FSimpleElementVertex(Line.End + WorldPointXE - WorldPointYE, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0E
+                        ThickVertices[5 + 18] = FSimpleElementVertex(Line.End - WorldPointXE + WorldPointYE, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3E
+
+                        ThickVertices += 24;
+                    }
+                    
 
                     FMeshBatchElement& BatchElement = Mesh.Elements[0];
                     BatchElement.IndexBuffer = &Section->IndexBuffer;
@@ -120,7 +194,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     GetScene().GetPrimitiveUniformShaderParameters_RenderThread(GetPrimitiveSceneInfo(), bHasPrecomputedVolumetricLightmap, PreviousLocalToWorld, SingleCaptureIndex, bOutputVelocity);
 
                     FDynamicPrimitiveUniformBuffer& DynamicPrimitiveUniformBuffer = Collector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
-                    DynamicPrimitiveUniformBuffer.Set(GetLocalToWorld(), PreviousLocalToWorld, GetBounds(), GetLocalBounds(), true, bHasPrecomputedVolumetricLightmap, DrawsVelocity(), bOutputVelocity);
+                    DynamicPrimitiveUniformBuffer.Set(GetLocalToWorld(), PreviousLocalToWorld, GetBounds(), GetLocalBounds(), true, bHasPrecomputedVolumetricLightmap, bOutputVelocity);
                     BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
 
                     BatchElement.FirstIndex = 0;
@@ -158,32 +232,22 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 {
     check(IsInGameThread());
 
-    const int32 SrcSectionIndex = SrcSection->SectionIndex;
-
-    // Copy data from vertex buffer
-    const int32 NumVerts = SrcSection->ProcVertexBuffer.Num();
+    const int32 SrcSectionIndex = 0;
 
     TSharedPtr<FLineMeshProxySection> NewSection(MakeShareable(new FLineMeshProxySection(GetScene().GetFeatureLevel())));
     {
-        NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 2, true);
+        NewSection->Lines = MoveTemp(SrcSection->Lines);
 
-        TArray<FVector3f> InVertexBuffer(MoveTemp(SrcSection->ProcVertexBuffer));
-        NewSection->VertexBuffers.PositionVertexBuffer.Init(InVertexBuffer, true);
-        NewSection->IndexBuffer.SetIndices(SrcSection->ProcIndexBuffer, EIndexBufferStride::Force16Bit);
+        const int32 NumVerts = SrcSection->Lines.Num() * 24;
+
+        NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 2, true);
+        NewSection->VertexBuffers.PositionVertexBuffer.Init(NumVerts, true);
+        // NewSection->IndexBuffer.SetIndices(SrcSection->ProcIndexBuffer, EIndexBufferStride::Force16Bit);
 
         // Enqueue initialization of render resource
         BeginInitResource(&NewSection->VertexBuffers.PositionVertexBuffer);
         BeginInitResource(&NewSection->VertexBuffers.StaticMeshVertexBuffer);
         BeginInitResource(&NewSection->IndexBuffer);
-
-        // Copy visibility info
-        NewSection->bSectionVisible = SrcSection->bSectionVisible;
-        NewSection->SectionLocalBox = SrcSection->SectionLocalBox;
-
-        NewSection->MaxVertexIndex = SrcSection->MaxVertexIndex;
-        NewSection->SectionIndex = SrcSectionIndex;
-
-        NewSection->Color = SrcSection->Color;
     }
 
     ENQUEUE_RENDER_COMMAND(LineMeshVertexBuffersInit)(
@@ -201,12 +265,12 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             NewSection->VertexFactory.SetData(Data);
             NewSection->VertexFactory.InitResource();
 
-#if WITH_EDITOR
+/*#if WITH_EDITOR
             TArray<UMaterialInterface*> UsedMaterials;
             Component->GetUsedMaterials(UsedMaterials);
 
             SetUsedMaterialForVerification(UsedMaterials);
-#endif
+#endif*/
 
             Sections.Add(SrcSectionIndex, NewSection);
 

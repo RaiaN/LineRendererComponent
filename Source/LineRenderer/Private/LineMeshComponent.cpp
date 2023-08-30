@@ -3,6 +3,7 @@
 #include "LineMeshComponent.h"
 #include "LineMeshSceneProxy.h"
 #include "LineMeshSection.h"
+#include "BatchedElements.h"
 
 
 DEFINE_LOG_CATEGORY_STATIC(LogLineMeshComponent, Log, All);
@@ -12,68 +13,44 @@ ULineMeshComponent::ULineMeshComponent(const FObjectInitializer& ObjectInitializ
 {
 }
 
-void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color, float Thickness)
+void ULineMeshComponent::CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FColor& Color, float Thickness)
+{
+    TSharedPtr<FLineMeshSection> NewSection(MakeShareable(new FLineMeshSection));
+    {
+        NewSection->SectionIndex = SectionIndex;
+        
+        FBatchedLine& Line = NewSection->Lines.AddDefaulted_GetRef();
+        Line.Start = StartPoint;
+        Line.End = EndPoint;
+        Line.Color = Color;
+        Line.Thickness = Thickness;
+    }
+
+    // Enqueue command to send to render thread
+    FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
+}
+
+void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FColor& Color, float Thickness)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateMeshSection);
 
-    TArray<FVector3f> Vertices(InVertices);
-
-    int32 IndexOffset = 0;
-
     TSharedPtr<FLineMeshSection> NewSection(MakeShareable(new FLineMeshSection));
-    {
-        const int32 NumVerts = (Vertices.Num() - 1) * 6;
-
-        NewSection->ProcVertexBuffer.Reset();
-        NewSection->ProcVertexBuffer.Reserve(NumVerts);
-        NewSection->ProcIndexBuffer.Reset();
-        NewSection->ProcIndexBuffer.Reserve(NumVerts * 3);
-    }
+    NewSection->SectionIndex = SectionIndex;
 
     for (int32 Ind = 0; Ind < Vertices.Num() - 1; ++Ind)
     {
-        const FVector3f& StartPoint = Vertices[Ind];
-        const FVector3f& EndPoint = Vertices[Ind+1];
+        const FVector& StartPoint = Vertices[Ind];
+        const FVector& EndPoint = Vertices[Ind + 1];
 
-        FVector3f Direction = (EndPoint - StartPoint).GetSafeNormal();
-        float Length = (EndPoint - StartPoint).Size();
-
-        FVector3f Tangent = FVector3f::CrossProduct(Direction, FVector3f::UpVector).GetSafeNormal();
-        FVector3f Normal = FVector3f::CrossProduct(Direction, Tangent).GetSafeNormal();
-
-        FVector3f StartVertex = StartPoint - Normal * Thickness / 2;
-        FVector3f EndVertex = EndPoint + Normal * Thickness / 2;
-
-        FVector3f Corner1 = StartVertex + Tangent * Thickness / 2;
-        FVector3f Corner2 = StartVertex - Tangent * Thickness / 2;
-        FVector3f Corner3 = EndVertex + Tangent * Thickness / 2;
-        FVector3f Corner4 = EndVertex - Tangent * Thickness / 2;
-
-        TArray<FVector3f> SegmentVertices{
-            Corner1, StartVertex, Corner2, // Corner vertices
-            Corner3, EndVertex, Corner4    // Start and end vertices
-        };
-
-        // Define the index buffer for the line with thickness
-        TArray<int32> SegmentIndices{
-            IndexOffset, IndexOffset + 3, IndexOffset + 1,
-            IndexOffset + 1, IndexOffset + 3, IndexOffset + 4,
-            IndexOffset + 1, IndexOffset + 4, IndexOffset + 2,
-            IndexOffset + 2, IndexOffset + 4, IndexOffset + 5,
-        };
-
-        IndexOffset += 3;
-
-        NewSection->ProcVertexBuffer.Append(SegmentVertices);
-        NewSection->ProcIndexBuffer.Append(SegmentIndices);
+        FBatchedLine& Line = NewSection->Lines.AddDefaulted_GetRef();
+        {
+            Line.Start = StartPoint;
+            Line.End = EndPoint;
+            Line.Color = Color;
+            Line.Thickness = Thickness;
+        }
     }
-
-    NewSection->MaxVertexIndex = Vertices.Num() * 3 - 1;
-
-	NewSection->SectionIndex = SectionIndex;
-    NewSection->SectionLocalBox = FBox3f(Vertices);
-    NewSection->SectionLocalBox = NewSection->SectionLocalBox.ExpandBy(Thickness);
-    NewSection->Color = CreateOrUpdateSectionColor(SectionIndex, Color);
 
     // Enqueue command to send to render thread
     FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
@@ -95,7 +72,7 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& I
     // Recreate line if mismatch in number of vertices
     if (Vertices.Num() != LineMeshSceneProxy->GetNumPointsInSection(SectionIndex))
     {
-        CreateLine(SectionIndex, InVertices, Color, 15.0);
+        // CreateLine(SectionIndex, InVertices, Color, 15.0);
         return;
     }
 
