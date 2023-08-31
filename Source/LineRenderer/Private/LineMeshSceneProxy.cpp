@@ -51,11 +51,14 @@ public:
     // FRenderResource interface.
     virtual void InitRHI() override
     {
-        const int32 VertexBufferRHIBytes = sizeof(FVector3f) * NumVertices;
+        const int32 VertexBufferRHIBytes = sizeof(FPositionVertex) * NumVertices;
 
         // create dynamic buffer
 
         FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"));
+
+        check (VertexData.IsValid());
+
         CreateInfo.ResourceArray = VertexData->GetResourceArray();
 
         VertexBufferRHI = CreateRHIBuffer<true>(VertexData, NumVertices, BUF_Dynamic | BUF_ShaderResource, TEXT("ThickLines"));
@@ -82,6 +85,13 @@ public:
         StaticMeshData.PositionComponentSRV = PositionComponentSRV;
     }
 
+    // Vertex data accessors.
+    FORCEINLINE FVector3f& VertexPosition(int32 VertexIndex)
+    {
+        check(VertexIndex < NumVertices);
+        return ((FPositionVertex*)(VertexData + VertexIndex * Stride))->Position;
+    }
+
     int32 GetStride() const
     {
         return Stride;
@@ -99,13 +109,14 @@ private:
 };
 
 /** Class representing a single section of the proc mesh */
-class FLineMeshProxySection
+class FLineMeshProxySection : public TSharedFromThis<FLineMeshProxySection>
 {
 public:
     virtual ~FLineMeshProxySection()
     {
         check (IsInRenderingThread());
 
+        PositionVB->ReleaseResource();
         VertexBuffers.StaticMeshVertexBuffer.ReleaseResource();
         VertexBuffers.PositionVertexBuffer.ReleaseResource();
         VertexBuffers.ColorVertexBuffer.ReleaseResource();
@@ -232,13 +243,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     const FVector WorldPointXE = CameraX * EndThickness * 0.5f;
                     const FVector WorldPointYE = CameraY * EndThickness * 0.5f;
 
-                    const int32 VertexBufferRHIBytes = sizeof(FPositionVertex) * 8 * 3 * Section->Lines.Num();
-
-                    FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"));
-                    // TODO: Make sure correct structs are used
-                    // FBufferRHIRef VertexBufferRHI = RHICreateVertexBuffer(VertexBufferRHIBytes, BUF_Volatile, CreateInfo);
-                    // void* ThickVertexData = RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
-                    // FSimpleElementVertex* ThickVertices = (FSimpleElementVertex*)ThickVertexData;
+                    /*const int32 VertexBufferRHIBytes = sizeof(FPositionVertex) * 8 * 3 * Section->Lines.Num();
 
                     FBufferRHIRef VertexBufferRHI = Section->PositionVB->VertexBufferRHI;
                     FPositionVertex* ThickVertices = (FPositionVertex*)RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
@@ -284,49 +289,9 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                         ThickVertices[5 + 18].Position = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
 
                         ThickVertices += 24;
-                        
-                        /* Commented out as we only need vertices position, nothing else
-                        // Begin point
-                        ThickVertices[0] = FSimpleElementVertex(Line.Start + WorldPointXS - WorldPointYS, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0S
-                        ThickVertices[1] = FSimpleElementVertex(Line.Start + WorldPointXS + WorldPointYS, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1S
-                        ThickVertices[2] = FSimpleElementVertex(Line.Start - WorldPointXS - WorldPointYS, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2S
-
-                        ThickVertices[3] = FSimpleElementVertex(Line.Start + WorldPointXS + WorldPointYS, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1S
-                        ThickVertices[4] = FSimpleElementVertex(Line.Start - WorldPointXS - WorldPointYS, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2S
-                        ThickVertices[5] = FSimpleElementVertex(Line.Start - WorldPointXS + WorldPointYS, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3S
-
-                        // Ending point
-                        ThickVertices[0 + 6] = FSimpleElementVertex(Line.End + WorldPointXE - WorldPointYE, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0E
-                        ThickVertices[1 + 6] = FSimpleElementVertex(Line.End + WorldPointXE + WorldPointYE, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1E
-                        ThickVertices[2 + 6] = FSimpleElementVertex(Line.End - WorldPointXE - WorldPointYE, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2E
-
-                        ThickVertices[3 + 6] = FSimpleElementVertex(Line.End + WorldPointXE + WorldPointYE, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1E
-                        ThickVertices[4 + 6] = FSimpleElementVertex(Line.End - WorldPointXE - WorldPointYE, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2E
-                        ThickVertices[5 + 6] = FSimpleElementVertex(Line.End - WorldPointXE + WorldPointYE, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3E
-
-                        // First part of line
-                        ThickVertices[0 + 12] = FSimpleElementVertex(Line.Start - WorldPointXS - WorldPointYS, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2S
-                        ThickVertices[1 + 12] = FSimpleElementVertex(Line.Start + WorldPointXS + WorldPointYS, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1S
-                        ThickVertices[2 + 12] = FSimpleElementVertex(Line.End - WorldPointXE - WorldPointYE, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2E
-
-                        ThickVertices[3 + 12] = FSimpleElementVertex(Line.Start + WorldPointXS + WorldPointYS, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1S
-                        ThickVertices[4 + 12] = FSimpleElementVertex(Line.End + WorldPointXE + WorldPointYE, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1E
-                        ThickVertices[5 + 12] = FSimpleElementVertex(Line.End - WorldPointXE - WorldPointYE, FVector2D(0, 0), Line.Color, FHitProxyId()); // 2E
-
-                        // Second part of line
-                        ThickVertices[0 + 18] = FSimpleElementVertex(Line.Start - WorldPointXS + WorldPointYS, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3S
-                        ThickVertices[1 + 18] = FSimpleElementVertex(Line.Start + WorldPointXS - WorldPointYS, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0S
-                        ThickVertices[2 + 18] = FSimpleElementVertex(Line.End - WorldPointXE + WorldPointYE, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3E
-
-                        ThickVertices[3 + 18] = FSimpleElementVertex(Line.Start + WorldPointXS - WorldPointYS, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0S
-                        ThickVertices[4 + 18] = FSimpleElementVertex(Line.End + WorldPointXE - WorldPointYE, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0E
-                        ThickVertices[5 + 18] = FSimpleElementVertex(Line.End - WorldPointXE + WorldPointYE, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3E
-
-                        ThickVertices += 24;
-                        */
                     }
 
-                    RHIUnlockBuffer(VertexBufferRHI);
+                    RHIUnlockBuffer(VertexBufferRHI);*/
                     
 
                     FMeshBatchElement& BatchElement = Mesh.Elements[0];
@@ -387,9 +352,94 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
         NewSection->MaxVertexIndex = NumVerts - 1;
         NewSection->SectionIndex = SrcSectionIndex;
 
-        NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 2, true);
-        NewSection->VertexBuffers.PositionVertexBuffer.Init(NumVerts, true);
+        NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 1, true);
+        // NewSection->VertexBuffers.PositionVertexBuffer.Init(NumVerts, true);
         NewSection->PositionVB = new FDynamicPositionVertexBuffer(NumVerts);
+
+        for (const FBatchedLine& Line : NewSection->Lines)
+        {
+            const FVector WorldPointXS = FVector(1, 0, 0) * Line.Thickness * 0.5f;
+            const FVector WorldPointYS = FVector(0, 1, 0) * Line.Thickness * 0.5f;
+
+            const FVector WorldPointXE = FVector(1, 0, 0) * Line.Thickness * 0.5f;
+            const FVector WorldPointYE = FVector(0, 1, 0) * Line.Thickness * 0.5f;
+
+            // Begin point
+            NewSection->PositionVB->VertexPosition(0) = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
+            NewSection->PositionVB->VertexPosition(1) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+            NewSection->PositionVB->VertexPosition(2) = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
+            /*
+            NewSection->PositionVB->VertexPosition(3) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+            NewSection->PositionVB->VertexPosition(4) = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
+            NewSection->PositionVB->VertexPosition(5) = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
+
+            // Ending point
+            NewSection->PositionVB->VertexPosition(6) = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
+            NewSection->PositionVB->VertexPosition(7) = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
+            NewSection->PositionVB->VertexPosition(8) = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+
+            NewSection->PositionVB->VertexPosition(9) = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
+            NewSection->PositionVB->VertexPosition(10) = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+            NewSection->PositionVB->VertexPosition(11) = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+
+            // First part of line
+            NewSection->PositionVB->VertexPosition(12) = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
+            NewSection->PositionVB->VertexPosition(13) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+            NewSection->PositionVB->VertexPosition(14) = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+
+            NewSection->PositionVB->VertexPosition(15) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+            NewSection->PositionVB->VertexPosition(16) = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
+            NewSection->PositionVB->VertexPosition(17) = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+
+            // Second part of line
+            NewSection->PositionVB->VertexPosition(18) = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
+            NewSection->PositionVB->VertexPosition(19) = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
+            NewSection->PositionVB->VertexPosition(20) = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+
+            NewSection->PositionVB->VertexPosition(21) = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
+            NewSection->PositionVB->VertexPosition(22) = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
+            NewSection->PositionVB->VertexPosition(23) = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+
+            FStaticMeshVertexBuffer& StaticMeshVB = NewSection->VertexBuffers.StaticMeshVertexBuffer;
+            */
+            /*
+            // Begin point
+            StaticMeshVB.SetVertexUV(0, 0, FVector2f(1, 0));
+            StaticMeshVB.SetVertexUV(1, 0, FVector2f(1, 1));
+            StaticMeshVB.SetVertexUV(2, 0, FVector2f(0, 0));
+
+            StaticMeshVB.SetVertexUV(3, 0, FVector2f(1, 1));
+            StaticMeshVB.SetVertexUV(4, 0, FVector2f(0, 0));
+            StaticMeshVB.SetVertexUV(5, 0, FVector2f(0, 1));
+
+            // Ending point
+            StaticMeshVB.SetVertexUV(6, 0, FVector2f(1, 0));
+            StaticMeshVB.SetVertexUV(7, 0, FVector2f(1, 1));
+            StaticMeshVB.SetVertexUV(8, 0, FVector2f(0, 0));
+
+            StaticMeshVB.SetVertexUV(9, 0, FVector2f(1, 1));
+            StaticMeshVB.SetVertexUV(10, 0, FVector2f(0, 0));
+            StaticMeshVB.SetVertexUV(11, 0, FVector2f(0, 1));
+            
+            // First part of line
+            StaticMeshVB.SetVertexUV(12, 0, FVector2f(0, 0));
+            StaticMeshVB.SetVertexUV(13, 0, FVector2f(1, 1));
+            StaticMeshVB.SetVertexUV(14, 0, FVector2f(0, 0));
+
+            StaticMeshVB.SetVertexUV(15, 0, FVector2f(1, 1));
+            StaticMeshVB.SetVertexUV(16, 0, FVector2f(1, 1));
+            StaticMeshVB.SetVertexUV(17, 0, FVector2f(0, 0));
+
+            // Second part of line
+            StaticMeshVB.SetVertexUV(18, 0, FVector2f(0, 1));
+            StaticMeshVB.SetVertexUV(19, 0, FVector2f(1, 0));
+            StaticMeshVB.SetVertexUV(20, 0, FVector2f(0, 1));
+
+            StaticMeshVB.SetVertexUV(21, 0, FVector2f(1, 0));
+            StaticMeshVB.SetVertexUV(22, 0, FVector2f(1, 0));
+            StaticMeshVB.SetVertexUV(23, 0, FVector2f(0, 1));
+            */
+        }
 
         TArray<uint32> IndexBuffer;
 
@@ -442,28 +492,29 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
         NewSection->IndexBuffer.SetIndices(IndexBuffer, EIndexBufferStride::Force16Bit);
 
         // Enqueue initialization of render resource
-        BeginInitResource(&NewSection->VertexBuffers.PositionVertexBuffer);
+        // BeginInitResource(&NewSection->VertexBuffers.PositionVertexBuffer);
         BeginInitResource(NewSection->PositionVB);
         BeginInitResource(&NewSection->VertexBuffers.StaticMeshVertexBuffer);
         BeginInitResource(&NewSection->IndexBuffer);
     }
 
+    TSharedRef<FLineMeshProxySection> SectionRef = StaticCastSharedRef<FLineMeshProxySection>(NewSection.ToSharedRef());
+
     ENQUEUE_RENDER_COMMAND(LineMeshVertexBuffersInit)(
-        [this, SrcSectionIndex, NewSection](FRHICommandListImmediate& RHICmdList)
+        [this, SrcSectionIndex, SectionRef](FRHICommandListImmediate& RHICmdList)
         {
             FLocalVertexFactory::FDataType Data;
 
-            // NewSection->VertexBuffers.PositionVertexBuffer.BindPositionVertexBuffer(&NewSection->VertexFactory, Data);
-            NewSection->PositionVB->BindPositionVertexBuffer(&NewSection->VertexFactory, Data);
+            SectionRef->PositionVB->BindPositionVertexBuffer(&SectionRef->VertexFactory, Data);
 
-            NewSection->VertexBuffers.StaticMeshVertexBuffer.BindTangentVertexBuffer(&NewSection->VertexFactory, Data);
-            NewSection->VertexBuffers.StaticMeshVertexBuffer.BindPackedTexCoordVertexBuffer(&NewSection->VertexFactory, Data);
-            NewSection->VertexBuffers.StaticMeshVertexBuffer.BindLightMapVertexBuffer(&NewSection->VertexFactory, Data, 1);
+            SectionRef->VertexBuffers.StaticMeshVertexBuffer.BindTangentVertexBuffer(&SectionRef->VertexFactory, Data);
+            SectionRef->VertexBuffers.StaticMeshVertexBuffer.BindPackedTexCoordVertexBuffer(&SectionRef->VertexFactory, Data);
+            SectionRef->VertexBuffers.StaticMeshVertexBuffer.BindLightMapVertexBuffer(&SectionRef->VertexFactory, Data, 1);
 
             Data.LODLightmapDataIndex = 0;
 
-            NewSection->VertexFactory.SetData(Data);
-            NewSection->VertexFactory.InitResource();
+            SectionRef->VertexFactory.SetData(Data);
+            SectionRef->VertexFactory.InitResource();
 
 /*#if WITH_EDITOR
             TArray<UMaterialInterface*> UsedMaterials;
@@ -472,7 +523,7 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             SetUsedMaterialForVerification(UsedMaterials);
 #endif*/
 
-            Sections.Add(SrcSectionIndex, NewSection);
+            Sections.Add(SrcSectionIndex, SectionRef);
 
             AsyncTask(
                 ENamedThreads::GameThread, 
@@ -482,7 +533,7 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
                 }
             );
 
-            NewSection->bInitialized = true;
+            SectionRef->bInitialized = true;
         }
     );
 }
