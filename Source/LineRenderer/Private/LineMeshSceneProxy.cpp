@@ -2,11 +2,101 @@
 
 #include "LineMeshSceneProxy.h"
 #include "MaterialShared.h"
+#include "Rendering/PositionVertexBuffer.h"
+#include "LocalVertexFactory.h"
 #include "LineMeshComponent.h"
 #include "LineMeshSection.h"
 #include "RHICommandList.h"
 
 PRAGMA_DISABLE_OPTIMIZATION
+
+class FPositionOnlyVertexData :
+    public TStaticMeshVertexData<FPositionVertex>
+{
+public:
+    FPositionOnlyVertexData()
+        : TStaticMeshVertexData<FPositionVertex>(false)
+    {}
+};
+
+/** A vertex buffer for lines. */
+class FDynamicPositionVertexBuffer : public FVertexBuffer
+{
+public:
+
+    /** Default constructor. */
+    FDynamicPositionVertexBuffer()
+        : NumVertices(0)
+    {}
+
+    FDynamicPositionVertexBuffer(int32 InNumVertices)
+        : NumVertices(InNumVertices)
+    {
+        VertexData = new FPositionOnlyVertexData();
+        VertexData->ResizeBuffer(NumVertices);
+
+        Stride = VertexData->GetStride();
+    }
+
+    /** Destructor. */
+    ~FDynamicPositionVertexBuffer()
+    {
+        if (VertexData)
+        {
+            delete VertexData;
+            VertexData = nullptr;
+        }
+    }
+
+    // FRenderResource interface.
+    virtual void InitRHI() override
+    {
+        const int32 VertexBufferRHIBytes = sizeof(FVector3f) * NumVertices;
+
+        // create dynamic buffer
+
+        FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"));
+        CreateInfo.ResourceArray = VertexData->GetResourceArray();
+
+        VertexBufferRHI = CreateRHIBuffer<true>(VertexData, NumVertices, BUF_Dynamic | BUF_ShaderResource, TEXT("ThickLines"));
+        if (VertexBufferRHI)
+        {
+            PositionComponentSRV = RHICreateShaderResourceView(FShaderResourceViewInitializer(VertexBufferRHI, PF_R32_FLOAT));
+        }
+    }
+
+    virtual void ReleaseRHI() override
+    {
+        PositionComponentSRV.SafeRelease();
+        FVertexBuffer::ReleaseRHI();
+    }
+
+    void BindPositionVertexBuffer(const class FVertexFactory* VertexFactory, struct FStaticMeshDataType& StaticMeshData) const
+    {
+        StaticMeshData.PositionComponent = FVertexStreamComponent(
+            this,
+            STRUCT_OFFSET(FPositionVertex, Position),
+            GetStride(),
+            VET_Float3
+        );
+        StaticMeshData.PositionComponentSRV = PositionComponentSRV;
+    }
+
+    int32 GetStride() const
+    {
+        return Stride;
+    }
+
+private:
+    int32 NumVertices;
+
+    int32 Stride = 0;
+
+    /** The vertex data storage type */
+    TMemoryImagePtr<class FPositionOnlyVertexData> VertexData;
+
+    FShaderResourceViewRHIRef PositionComponentSRV;
+};
 
 /** Class representing a single section of the proc mesh */
 class FLineMeshProxySection
@@ -28,6 +118,10 @@ public:
 
     /** Vertex buffer for this section */
     FStaticMeshVertexBuffers VertexBuffers;
+
+    /** Position only vertex buffer */
+    FDynamicPositionVertexBuffer* PositionVB;
+
     /** Index buffer for this section */
     FRawStaticIndexBuffer IndexBuffer;
     /** Vertex factory for this section */
@@ -136,17 +230,60 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     const FVector WorldPointXE = CameraX * EndThickness * 0.5f;
                     const FVector WorldPointYE = CameraY * EndThickness * 0.5f;
 
-                    const int32 VertexBufferRHIBytes = sizeof(FSimpleElementVertex) * 8 * 3 * Section->Lines.Num();
+                    const int32 VertexBufferRHIBytes = sizeof(FPositionVertex) * 8 * 3 * Section->Lines.Num();
 
                     FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"));
                     // TODO: Make sure correct structs are used
-                    FBufferRHIRef VertexBufferRHI = RHICreateVertexBuffer(VertexBufferRHIBytes, BUF_Volatile, CreateInfo);
-                    void* ThickVertexData = RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
-                    FSimpleElementVertex* ThickVertices = (FSimpleElementVertex*)ThickVertexData;
+                    // FBufferRHIRef VertexBufferRHI = RHICreateVertexBuffer(VertexBufferRHIBytes, BUF_Volatile, CreateInfo);
+                    // void* ThickVertexData = RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
+                    // FSimpleElementVertex* ThickVertices = (FSimpleElementVertex*)ThickVertexData;
+
+                    FBufferRHIRef VertexBufferRHI = Section->PositionVB->VertexBufferRHI;
+                    FPositionVertex* ThickVertices = (FPositionVertex*)RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
+
                     check(ThickVertices);
 
                     for (const FBatchedLine& Line : Section->Lines)
                     {
+                        // Begin point
+                        ThickVertices[0].Position = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
+                        ThickVertices[1].Position = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+                        ThickVertices[2].Position = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
+
+                        ThickVertices[3].Position = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+                        ThickVertices[4].Position = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
+                        ThickVertices[5].Position = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
+
+                        // Ending point
+                        ThickVertices[0 + 6].Position = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
+                        ThickVertices[1 + 6].Position = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
+                        ThickVertices[2 + 6].Position = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+
+                        ThickVertices[3 + 6].Position = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
+                        ThickVertices[4 + 6].Position = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+                        ThickVertices[5 + 6].Position = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+
+                        // First part of line
+                        ThickVertices[0 + 12].Position = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
+                        ThickVertices[1 + 12].Position = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+                        ThickVertices[2 + 12].Position = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+
+                        ThickVertices[3 + 12].Position = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+                        ThickVertices[4 + 12].Position = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
+                        ThickVertices[5 + 12].Position = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+
+                        // Second part of line
+                        ThickVertices[0 + 18].Position = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
+                        ThickVertices[1 + 18].Position = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
+                        ThickVertices[2 + 18].Position = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+
+                        ThickVertices[3 + 18].Position = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
+                        ThickVertices[4 + 18].Position = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
+                        ThickVertices[5 + 18].Position = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+
+                        ThickVertices += 24;
+                        
+                        /* Commented out as we only need vertices position, nothing else
                         // Begin point
                         ThickVertices[0] = FSimpleElementVertex(Line.Start + WorldPointXS - WorldPointYS, FVector2D(1, 0), Line.Color, FHitProxyId()); // 0S
                         ThickVertices[1] = FSimpleElementVertex(Line.Start + WorldPointXS + WorldPointYS, FVector2D(1, 1), Line.Color, FHitProxyId()); // 1S
@@ -184,7 +321,10 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                         ThickVertices[5 + 18] = FSimpleElementVertex(Line.End - WorldPointXE + WorldPointYE, FVector2D(0, 1), Line.Color, FHitProxyId()); // 3E
 
                         ThickVertices += 24;
+                        */
                     }
+
+                    RHIUnlockBuffer(VertexBufferRHI);
                     
 
                     FMeshBatchElement& BatchElement = Mesh.Elements[0];
@@ -247,6 +387,7 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 
         NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 2, true);
         NewSection->VertexBuffers.PositionVertexBuffer.Init(NumVerts, true);
+        NewSection->PositionVB = new FDynamicPositionVertexBuffer(NumVerts);
 
         TArray<uint32> IndexBuffer;
 
@@ -300,6 +441,7 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 
         // Enqueue initialization of render resource
         BeginInitResource(&NewSection->VertexBuffers.PositionVertexBuffer);
+        BeginInitResource(NewSection->PositionVB);
         BeginInitResource(&NewSection->VertexBuffers.StaticMeshVertexBuffer);
         BeginInitResource(&NewSection->IndexBuffer);
     }
@@ -309,7 +451,9 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
         {
             FLocalVertexFactory::FDataType Data;
 
-            NewSection->VertexBuffers.PositionVertexBuffer.BindPositionVertexBuffer(&NewSection->VertexFactory, Data);
+            // NewSection->VertexBuffers.PositionVertexBuffer.BindPositionVertexBuffer(&NewSection->VertexFactory, Data);
+            NewSection->PositionVB->BindPositionVertexBuffer(&NewSection->VertexFactory, Data);
+
             NewSection->VertexBuffers.StaticMeshVertexBuffer.BindTangentVertexBuffer(&NewSection->VertexFactory, Data);
             NewSection->VertexBuffers.StaticMeshVertexBuffer.BindPackedTexCoordVertexBuffer(&NewSection->VertexFactory, Data);
             NewSection->VertexBuffers.StaticMeshVertexBuffer.BindLightMapVertexBuffer(&NewSection->VertexFactory, Data, 1);
