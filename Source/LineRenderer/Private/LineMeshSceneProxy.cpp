@@ -136,6 +136,8 @@ public:
     int32 MaxVertexIndex;
     /** Section index */
     int32 SectionIndex;
+    /** Section thickness */
+    float SectionThickness;
 
     FLineMeshProxySection(ERHIFeatureLevel::Type InFeatureLevel)
         : VertexFactory(InFeatureLevel, "FLineMeshProxySection")
@@ -217,8 +219,8 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     FVector CameraZ = ClipToWorld.TransformVector(FVector(0, 0, 1)).GetSafeNormal();
 
                     // TODO: Add this option to section!
-                    const float ScreenSpaceScaling = 1.0f; // Line.bScreenSpace ? 2.0f : 1.0f;
-                    const float Thickness = 1.0f;
+                    const float ScreenSpaceScaling = 2.0f; // Line.bScreenSpace ? 2.0f : 1.0f;
+                    const float Thickness = Section->Lines[0].Thickness;
 
                     float OrthoZoomFactor = 1.0f;
                     const float StartThickness = Thickness * ScreenSpaceScaling * OrthoZoomFactor;
