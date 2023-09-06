@@ -17,6 +17,11 @@ public:
     FPositionOnlyVertexData()
         : TStaticMeshVertexData<FPositionVertex>(false)
     {}
+
+    ~FPositionOnlyVertexData()
+    {
+        ensure(false);
+    }
 };
 
 /** A vertex buffer for lines. */
@@ -32,7 +37,7 @@ public:
     FDynamicPositionVertexBuffer(int32 InNumVertices)
         : NumVertices(InNumVertices)
     {
-        VertexData = new FPositionOnlyVertexData();
+        VertexData = MakeUnique<FPositionOnlyVertexData>();
         VertexData->ResizeBuffer(NumVertices);
 
         Stride = VertexData->GetStride();
@@ -43,25 +48,26 @@ public:
     {
         if (VertexData)
         {
-            delete VertexData;
-            VertexData = nullptr;
+            VertexData.Reset();
         }
     }
 
     // FRenderResource interface.
     virtual void InitRHI() override
     {
-        const int32 VertexBufferRHIBytes = sizeof(FPositionVertex) * NumVertices;
-
         // create dynamic buffer
 
-        FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"));
+        FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"), VertexData->GetResourceArray());
 
         check (VertexData.IsValid());
 
-        CreateInfo.ResourceArray = VertexData->GetResourceArray();
+        const uint32 SizeInBytes = VertexData->GetResourceArray()->GetResourceDataSize();
 
-        VertexBufferRHI = CreateRHIBuffer<true>(VertexData, NumVertices, BUF_Dynamic | BUF_ShaderResource, TEXT("ThickLines"));
+        VertexBufferRHI = RHICreateVertexBuffer(SizeInBytes, BUF_Dynamic | BUF_ShaderResource, CreateInfo);
+
+        // CreateInfo.ResourceArray = VertexData->GetResourceArray();
+
+        // VertexBufferRHI = CreateRHIBuffer<true>(VertexData, NumVertices, BUF_Dynamic | BUF_ShaderResource, TEXT("ThickLines"));
         if (VertexBufferRHI)
         {
             PositionComponentSRV = RHICreateShaderResourceView(FShaderResourceViewInitializer(VertexBufferRHI, PF_R32_FLOAT));
@@ -89,7 +95,7 @@ public:
     FORCEINLINE FVector3f& VertexPosition(int32 VertexIndex)
     {
         check(VertexIndex < NumVertices);
-        return ((FPositionVertex*)(VertexData + VertexIndex * Stride))->Position;
+        return ((FPositionVertex*)(VertexData->GetDataPointer() + VertexIndex * Stride))->Position;
     }
 
     int32 GetStride() const
@@ -103,7 +109,7 @@ private:
     int32 Stride = 0;
 
     /** The vertex data storage type */
-    TMemoryImagePtr<class FPositionOnlyVertexData> VertexData;
+    TUniquePtr<class FPositionOnlyVertexData> VertexData;
 
     FShaderResourceViewRHIRef PositionComponentSRV;
 };
@@ -368,7 +374,7 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             NewSection->PositionVB->VertexPosition(0) = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
             NewSection->PositionVB->VertexPosition(1) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
             NewSection->PositionVB->VertexPosition(2) = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
-            /*
+            
             NewSection->PositionVB->VertexPosition(3) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
             NewSection->PositionVB->VertexPosition(4) = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
             NewSection->PositionVB->VertexPosition(5) = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
@@ -399,10 +405,11 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             NewSection->PositionVB->VertexPosition(21) = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
             NewSection->PositionVB->VertexPosition(22) = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
             NewSection->PositionVB->VertexPosition(23) = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+            
 
-            FStaticMeshVertexBuffer& StaticMeshVB = NewSection->VertexBuffers.StaticMeshVertexBuffer;
-            */
             /*
+            FStaticMeshVertexBuffer& StaticMeshVB = NewSection->VertexBuffers.StaticMeshVertexBuffer;
+            
             // Begin point
             StaticMeshVB.SetVertexUV(0, 0, FVector2f(1, 0));
             StaticMeshVB.SetVertexUV(1, 0, FVector2f(1, 1));
