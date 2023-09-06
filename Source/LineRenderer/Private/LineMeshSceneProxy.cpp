@@ -251,50 +251,50 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     const FVector WorldPointXE = CameraX * EndThickness * 0.5f;
                     const FVector WorldPointYE = CameraY * EndThickness * 0.5f;
 
-                    /*const int32 VertexBufferRHIBytes = sizeof(FPositionVertex) * 8 * 3 * Section->Lines.Num();
+                    /*const int32 VertexBufferRHIBytes = sizeof(FVector3f) * 8 * 3 * Section->Lines.Num();
 
                     FBufferRHIRef VertexBufferRHI = Section->PositionVB->VertexBufferRHI;
-                    FPositionVertex* ThickVertices = (FPositionVertex*)RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
+                    FVector3f* ThickVertices = (FVector3f*)RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
 
                     check(ThickVertices);
 
                     for (const FBatchedLine& Line : Section->Lines)
                     {
                         // Begin point
-                        ThickVertices[0].Position = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
-                        ThickVertices[1].Position = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
-                        ThickVertices[2].Position = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
+                        ThickVertices[0] = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
+                        ThickVertices[1] = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+                        ThickVertices[2] = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
 
-                        ThickVertices[3].Position = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
-                        ThickVertices[4].Position = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
-                        ThickVertices[5].Position = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
+                        ThickVertices[3] = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+                        ThickVertices[4] = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
+                        ThickVertices[5] = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
 
                         // Ending point
-                        ThickVertices[0 + 6].Position = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
-                        ThickVertices[1 + 6].Position = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
-                        ThickVertices[2 + 6].Position = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+                        ThickVertices[0 + 6] = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
+                        ThickVertices[1 + 6] = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
+                        ThickVertices[2 + 6] = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
 
-                        ThickVertices[3 + 6].Position = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
-                        ThickVertices[4 + 6].Position = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
-                        ThickVertices[5 + 6].Position = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+                        ThickVertices[3 + 6] = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
+                        ThickVertices[4 + 6] = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+                        ThickVertices[5 + 6] = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
 
                         // First part of line
-                        ThickVertices[0 + 12].Position = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
-                        ThickVertices[1 + 12].Position = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
-                        ThickVertices[2 + 12].Position = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+                        ThickVertices[0 + 12] = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
+                        ThickVertices[1 + 12] = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+                        ThickVertices[2 + 12] = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
 
-                        ThickVertices[3 + 12].Position = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
-                        ThickVertices[4 + 12].Position = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
-                        ThickVertices[5 + 12].Position = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
+                        ThickVertices[3 + 12] = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
+                        ThickVertices[4 + 12] = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
+                        ThickVertices[5 + 12] = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
 
                         // Second part of line
-                        ThickVertices[0 + 18].Position = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
-                        ThickVertices[1 + 18].Position = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
-                        ThickVertices[2 + 18].Position = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+                        ThickVertices[0 + 18] = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
+                        ThickVertices[1 + 18] = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
+                        ThickVertices[2 + 18] = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
 
-                        ThickVertices[3 + 18].Position = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
-                        ThickVertices[4 + 18].Position = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
-                        ThickVertices[5 + 18].Position = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+                        ThickVertices[3 + 18] = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
+                        ThickVertices[4 + 18] = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
+                        ThickVertices[5 + 18] = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
 
                         ThickVertices += 24;
                     }
