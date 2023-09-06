@@ -14,4 +14,7 @@ struct FLineMeshSection
 public:
     TArray<FBatchedLine> Lines;
     int32 SectionIndex;
+
+    UMaterialInterface* Material;
+    FLinearColor Color;
 };

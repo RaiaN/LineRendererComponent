@@ -13,11 +13,12 @@ ULineMeshComponent::ULineMeshComponent(const FObjectInitializer& ObjectInitializ
 {
 }
 
-void ULineMeshComponent::CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FColor& Color, float Thickness)
+void ULineMeshComponent::CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness)
 {
     TSharedPtr<FLineMeshSection> NewSection(MakeShareable(new FLineMeshSection));
     {
         NewSection->SectionIndex = SectionIndex;
+        NewSection->Color = Color;
         
         FBatchedLine& Line = NewSection->Lines.AddDefaulted_GetRef();
         Line.Start = StartPoint;
@@ -26,17 +27,20 @@ void ULineMeshComponent::CreateLine2Points(int32 SectionIndex, const FVector& St
         Line.Thickness = Thickness;
     }
 
+    NewSection->Material = CreateOrUpdateMaterial(SectionIndex, Color);
+
     // Enqueue command to send to render thread
     FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
     ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
 }
 
-void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FColor& Color, float Thickness)
+void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateMeshSection);
 
     TSharedPtr<FLineMeshSection> NewSection(MakeShareable(new FLineMeshSection));
     NewSection->SectionIndex = SectionIndex;
+    NewSection->Color = Color;
 
     for (int32 Ind = 0; Ind < Vertices.Num() - 1; ++Ind)
     {
@@ -51,6 +55,8 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
             Line.Thickness = Thickness;
         }
     }
+
+    NewSection->Material = CreateOrUpdateMaterial(SectionIndex, Color);
 
     // Enqueue command to send to render thread
     FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
@@ -156,6 +162,43 @@ FPrimitiveSceneProxy* ULineMeshComponent::CreateSceneProxy()
 	// SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateSceneProxy);
 
 	return new FLineMeshSceneProxy(this);
+}
+
+UMaterialInterface* ULineMeshComponent::GetMaterial(int32 ElementIndex) const
+{
+    if (SectionMaterials.Contains(ElementIndex))
+    {
+        return SectionMaterials[ElementIndex];
+    }
+
+    return nullptr;
+}
+
+void ULineMeshComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /*= false*/) const
+{
+    Super::GetUsedMaterials(OutMaterials, bGetDebugMaterials);
+
+    OutMaterials.Add(Material);
+
+    for (TTuple<int32, UMaterialInstanceDynamic*> KeyValuePair : SectionMaterials)
+    {
+        OutMaterials.Add(KeyValuePair.Value);
+    }
+}
+
+UMaterialInterface* ULineMeshComponent::CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color)
+{
+    if (!SectionMaterials.Contains(SectionIndex))
+    {
+        UMaterialInstanceDynamic* MI = UMaterialInstanceDynamic::Create(Material, this);
+        SectionMaterials.Add(SectionIndex, MI);
+        OverrideMaterials.Add(MI);
+    }
+
+    UMaterialInstanceDynamic* MI = SectionMaterials[SectionIndex];
+    MI->SetVectorParameterValue(TEXT("LineColor"), Color);
+
+    return MI;
 }
 
 FLinearColor ULineMeshComponent::CreateOrUpdateSectionColor(int32 SectionIndex, const FLinearColor& Color)

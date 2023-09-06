@@ -19,9 +19,7 @@ public:
     {}
 
     ~FPositionOnlyVertexData()
-    {
-        ensure(false);
-    }
+    {}
 };
 
 /** A vertex buffer for lines. */
@@ -64,10 +62,6 @@ public:
         const uint32 SizeInBytes = VertexData->GetResourceArray()->GetResourceDataSize();
 
         VertexBufferRHI = RHICreateVertexBuffer(SizeInBytes, BUF_Dynamic | BUF_ShaderResource, CreateInfo);
-
-        // CreateInfo.ResourceArray = VertexData->GetResourceArray();
-
-        // VertexBufferRHI = CreateRHIBuffer<true>(VertexData, NumVertices, BUF_Dynamic | BUF_ShaderResource, TEXT("ThickLines"));
         if (VertexBufferRHI)
         {
             PositionComponentSRV = RHICreateShaderResourceView(FShaderResourceViewInitializer(VertexBufferRHI, PF_R32_FLOAT));
@@ -93,6 +87,13 @@ public:
 
     // Vertex data accessors.
     FORCEINLINE FVector3f& VertexPosition(int32 VertexIndex)
+    {
+        check(VertexIndex < NumVertices);
+        return ((FPositionVertex*)(VertexData->GetDataPointer() + VertexIndex * Stride))->Position;
+    }
+
+    // Vertex data accessors.
+    FORCEINLINE const FVector3f& VertexPosition(int32 VertexIndex) const 
     {
         check(VertexIndex < NumVertices);
         return ((FPositionVertex*)(VertexData->GetDataPointer() + VertexIndex * Stride))->Position;
@@ -135,10 +136,8 @@ public:
 
     /** Vertex buffer for this section */
     FStaticMeshVertexBuffers VertexBuffers;
-
     /** Position only vertex buffer */
     FDynamicPositionVertexBuffer* PositionVB;
-
     /** Index buffer for this section */
     FRawStaticIndexBuffer IndexBuffer;
     /** Vertex factory for this section */
@@ -155,6 +154,12 @@ public:
     int32 SectionIndex;
     /** Section thickness */
     float SectionThickness;
+
+    // Customization
+    /** Material applied to this section */
+    class UMaterialInterface* Material;
+    /** Color applied to this section */
+    FLinearColor Color;
 
     FLineMeshProxySection(ERHIFeatureLevel::Type InFeatureLevel)
         : VertexFactory(InFeatureLevel, "FLineMeshProxySection")
@@ -205,10 +210,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
 
         if (Section.IsValid() && Section->bInitialized && Section->bSectionVisible)
         {
-            // FMaterialRenderProxy* MaterialProxy = Section->Material->GetRenderProxy();
-
-            // FMaterialRenderProxy* const MaterialProxy = new FColoredMaterialRenderProxy(GEngine->WireframeMaterial->GetRenderProxy(), Section->Color);
-            // Collector.RegisterOneFrameMaterialProxy(MaterialProxy);
+            FMaterialRenderProxy* MaterialProxy = Section->Material->GetRenderProxy();
 
             // For each view..
             for (int32 ViewIndex = 0; ViewIndex < Views.Num(); ViewIndex++)
@@ -219,7 +221,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     // Draw the mesh.
                     FMeshBatch& Mesh = Collector.AllocateMesh();
                     Mesh.VertexFactory = &Section->VertexFactory;
-                    Mesh.MaterialRenderProxy = UMaterial::GetDefaultMaterial(MD_Surface)->GetRenderProxy();
+                    Mesh.MaterialRenderProxy = MaterialProxy;
                     Mesh.ReverseCulling = !IsLocalToWorldDeterminantNegative();
                     Mesh.bDisableBackfaceCulling = true;
                     Mesh.Type = PT_TriangleList;
@@ -357,9 +359,12 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
         NewSection->Lines = MoveTemp(SrcSection->Lines);
         NewSection->MaxVertexIndex = NumVerts - 1;
         NewSection->SectionIndex = SrcSectionIndex;
+        NewSection->Material = SrcSection->Material;
+        NewSection->Color = SrcSection->Color;
+        
+        NewSection->SectionLocalBox = FBox3f(EForceInit::ForceInitToZero);
 
         NewSection->VertexBuffers.StaticMeshVertexBuffer.Init(NumVerts, 1, true);
-        // NewSection->VertexBuffers.PositionVertexBuffer.Init(NumVerts, true);
         NewSection->PositionVB = new FDynamicPositionVertexBuffer(NumVerts);
 
         for (const FBatchedLine& Line : NewSection->Lines)
@@ -405,6 +410,11 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             NewSection->PositionVB->VertexPosition(21) = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
             NewSection->PositionVB->VertexPosition(22) = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
             NewSection->PositionVB->VertexPosition(23) = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
+
+            for (int32 vInd = 0; vInd < 24; ++vInd)
+            {
+                NewSection->SectionLocalBox += NewSection->PositionVB->VertexPosition(vInd);
+            }
             
 
             /*
@@ -499,9 +509,8 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
         NewSection->IndexBuffer.SetIndices(IndexBuffer, EIndexBufferStride::Force16Bit);
 
         // Enqueue initialization of render resource
-        // BeginInitResource(&NewSection->VertexBuffers.PositionVertexBuffer);
-        BeginInitResource(NewSection->PositionVB);
         BeginInitResource(&NewSection->VertexBuffers.StaticMeshVertexBuffer);
+        BeginInitResource(NewSection->PositionVB);
         BeginInitResource(&NewSection->IndexBuffer);
     }
 
@@ -523,12 +532,12 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             SectionRef->VertexFactory.SetData(Data);
             SectionRef->VertexFactory.InitResource();
 
-/*#if WITH_EDITOR
+#if WITH_EDITOR
             TArray<UMaterialInterface*> UsedMaterials;
             Component->GetUsedMaterials(UsedMaterials);
 
             SetUsedMaterialForVerification(UsedMaterials);
-#endif*/
+#endif
 
             Sections.Add(SrcSectionIndex, SectionRef);
 
