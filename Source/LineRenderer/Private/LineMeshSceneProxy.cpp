@@ -55,11 +55,12 @@ public:
     {
         // create dynamic buffer
 
-        FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"), VertexData->GetResourceArray());
+        // FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"), VertexData->GetResourceArray());
+        FRHIResourceCreateInfo CreateInfo(TEXT("ThickLines"));
 
         check (VertexData.IsValid());
 
-        const uint32 SizeInBytes = sizeof(FVector3f) * 8 * 3;
+        const uint32 SizeInBytes = NumVertices * sizeof(FVector3f) * 8 * 3;
 
         VertexBufferRHI = RHICreateVertexBuffer(SizeInBytes, BUF_Dynamic | BUF_ShaderResource, CreateInfo);
         if (VertexBufferRHI)
@@ -363,7 +364,7 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 {
     check(IsInGameThread());
 
-    const int32 NumVerts = SrcSection->Lines.Num() * 24;
+    const int32 NumVerts = SrcSection->Lines.Num() * 8 * 3;
 
     const int32 SrcSectionIndex = SrcSection->SectionIndex;
 
@@ -385,7 +386,6 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             NewSection->SectionLocalBox += FVector3f(Line.Start);
             NewSection->SectionLocalBox += FVector3f(Line.End);
 
-            /*
             FStaticMeshVertexBuffer& StaticMeshVB = NewSection->VertexBuffers.StaticMeshVertexBuffer;
             
             // Begin point
@@ -423,7 +423,6 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             StaticMeshVB.SetVertexUV(21, 0, FVector2f(1, 0));
             StaticMeshVB.SetVertexUV(22, 0, FVector2f(1, 0));
             StaticMeshVB.SetVertexUV(23, 0, FVector2f(0, 1));
-            */
         }
 
         TArray<uint32> IndexBuffer;
