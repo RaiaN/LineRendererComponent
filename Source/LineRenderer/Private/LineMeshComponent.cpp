@@ -13,7 +13,7 @@ ULineMeshComponent::ULineMeshComponent(const FObjectInitializer& ObjectInitializ
 {
 }
 
-void ULineMeshComponent::CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness)
+void ULineMeshComponent::CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness, int32 NumSegments)
 {
     TSharedPtr<FLineMeshSection> NewSection(MakeShareable(new FLineMeshSection));
     {
