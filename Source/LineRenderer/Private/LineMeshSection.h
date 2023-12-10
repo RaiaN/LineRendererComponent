@@ -7,8 +7,7 @@
 
 class UMaterialInterface;
 
-/**
-/** Line section description */
+/* Line section description */
 struct FLineMeshSection
 {
 public:
