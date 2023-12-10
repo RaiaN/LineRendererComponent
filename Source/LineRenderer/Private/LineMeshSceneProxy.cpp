@@ -59,7 +59,7 @@ public:
 
         check (VertexData.IsValid());
 
-        const uint32 SizeInBytes = VertexData->GetResourceArray()->GetResourceDataSize();
+        const uint32 SizeInBytes = sizeof(FVector3f) * 8 * 3;
 
         VertexBufferRHI = RHICreateVertexBuffer(SizeInBytes, BUF_Dynamic | BUF_ShaderResource, CreateInfo);
         if (VertexBufferRHI)
@@ -218,6 +218,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                 if (VisibilityMap & (1 << ViewIndex))
                 {
                     const FSceneView* View = Views[ViewIndex];
+
                     // Draw the mesh.
                     FMeshBatch& Mesh = Collector.AllocateMesh();
                     Mesh.VertexFactory = &Section->VertexFactory;
@@ -241,9 +242,17 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     const float ScreenSpaceScaling = 2.0f; // Line.bScreenSpace ? 2.0f : 1.0f;
                     const float Thickness = Section->Lines[0].Thickness;
 
-                    float OrthoZoomFactor = 1.0f;
-                    const float StartThickness = Thickness * ScreenSpaceScaling * OrthoZoomFactor;
-                    const float EndThickness = Thickness * ScreenSpaceScaling * OrthoZoomFactor;
+                    const float StartW = WorldToClip.TransformFVector4(Section->Lines[0].Start).W;
+                    const float EndW = WorldToClip.TransformFVector4(Section->Lines[0].End).W;
+
+                    // Negative thickness means that thickness is calculated in screen space, positive thickness should be used for world space thickness.
+                    const float ScalingStart = StartW / ViewportSizeX;
+                    const float ScalingEnd = EndW / ViewportSizeX;
+
+                    const float CurrentOrthoZoomFactor = 1.0f;
+
+                    const float StartThickness = Thickness * ScreenSpaceScaling * CurrentOrthoZoomFactor * ScalingStart;
+                    const float EndThickness = Thickness * ScreenSpaceScaling * CurrentOrthoZoomFactor * ScalingEnd;
 
                     const FVector WorldPointXS = CameraX * StartThickness * 0.5f;
                     const FVector WorldPointYS = CameraY * StartThickness * 0.5f;
@@ -251,7 +260,11 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     const FVector WorldPointXE = CameraX * EndThickness * 0.5f;
                     const FVector WorldPointYE = CameraY * EndThickness * 0.5f;
 
-                    /*const int32 VertexBufferRHIBytes = sizeof(FVector3f) * 8 * 3 * Section->Lines.Num();
+                    // Generate vertices for the point such that the post-transform point size is constant.
+                    const FVector WorldPointX = CameraX * Thickness * StartW / ViewportSizeX;
+                    const FVector WorldPointY = CameraY * Thickness * StartW / ViewportSizeX;
+
+                    const int32 VertexBufferRHIBytes = Section->PositionVB->VertexBufferRHI->GetSize();
 
                     FBufferRHIRef VertexBufferRHI = Section->PositionVB->VertexBufferRHI;
                     FVector3f* ThickVertices = (FVector3f*)RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
@@ -299,7 +312,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                         ThickVertices += 24;
                     }
 
-                    RHIUnlockBuffer(VertexBufferRHI);*/
+                    RHIUnlockBuffer(VertexBufferRHI);
                     
 
                     FMeshBatchElement& BatchElement = Mesh.Elements[0];
@@ -369,53 +382,8 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 
         for (const FBatchedLine& Line : NewSection->Lines)
         {
-            const FVector WorldPointXS = FVector(1, 0, 0) * Line.Thickness * 0.5f;
-            const FVector WorldPointYS = FVector(0, 1, 0) * Line.Thickness * 0.5f;
-
-            const FVector WorldPointXE = FVector(1, 0, 0) * Line.Thickness * 0.5f;
-            const FVector WorldPointYE = FVector(0, 1, 0) * Line.Thickness * 0.5f;
-
-            // Begin point
-            NewSection->PositionVB->VertexPosition(0) = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
-            NewSection->PositionVB->VertexPosition(1) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
-            NewSection->PositionVB->VertexPosition(2) = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
-            
-            NewSection->PositionVB->VertexPosition(3) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
-            NewSection->PositionVB->VertexPosition(4) = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
-            NewSection->PositionVB->VertexPosition(5) = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
-
-            // Ending point
-            NewSection->PositionVB->VertexPosition(6) = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
-            NewSection->PositionVB->VertexPosition(7) = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
-            NewSection->PositionVB->VertexPosition(8) = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
-
-            NewSection->PositionVB->VertexPosition(9) = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
-            NewSection->PositionVB->VertexPosition(10) = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
-            NewSection->PositionVB->VertexPosition(11) = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
-
-            // First part of line
-            NewSection->PositionVB->VertexPosition(12) = FVector3f(Line.Start - WorldPointXS - WorldPointYS); // 2S
-            NewSection->PositionVB->VertexPosition(13) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
-            NewSection->PositionVB->VertexPosition(14) = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
-
-            NewSection->PositionVB->VertexPosition(15) = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S
-            NewSection->PositionVB->VertexPosition(16) = FVector3f(Line.End + WorldPointXE + WorldPointYE); // 1E
-            NewSection->PositionVB->VertexPosition(17) = FVector3f(Line.End - WorldPointXE - WorldPointYE); // 2E
-
-            // Second part of line
-            NewSection->PositionVB->VertexPosition(18) = FVector3f(Line.Start - WorldPointXS + WorldPointYS); // 3S
-            NewSection->PositionVB->VertexPosition(19) = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
-            NewSection->PositionVB->VertexPosition(20) = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
-
-            NewSection->PositionVB->VertexPosition(21) = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
-            NewSection->PositionVB->VertexPosition(22) = FVector3f(Line.End + WorldPointXE - WorldPointYE); // 0E
-            NewSection->PositionVB->VertexPosition(23) = FVector3f(Line.End - WorldPointXE + WorldPointYE); // 3E
-
-            for (int32 vInd = 0; vInd < 24; ++vInd)
-            {
-                NewSection->SectionLocalBox += NewSection->PositionVB->VertexPosition(vInd);
-            }
-            
+            NewSection->SectionLocalBox += FVector3f(Line.Start);
+            NewSection->SectionLocalBox += FVector3f(Line.End);
 
             /*
             FStaticMeshVertexBuffer& StaticMeshVB = NewSection->VertexBuffers.StaticMeshVertexBuffer;
@@ -460,50 +428,47 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 
         TArray<uint32> IndexBuffer;
 
-        int32 VertexOffset = 0;
+        int32 IndexOffset = 0;
         for (int32 LineIndex = 0; LineIndex < NewSection->Lines.Num(); ++LineIndex)
         {
-            // Calculate the index offset for this line
-            int32 IndexOffset = LineIndex * 24; // Each line has 24 vertices
-
             // First rectangle
-            IndexBuffer.Add(VertexOffset + 0 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 1 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 2 + IndexOffset);
+            IndexBuffer.Add(IndexOffset + 0);
+            IndexBuffer.Add(IndexOffset + 1);
+            IndexBuffer.Add(IndexOffset + 2);
 
-            IndexBuffer.Add(VertexOffset + 1 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 4 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 2 + IndexOffset);
+            IndexBuffer.Add(IndexOffset + 3);
+            IndexBuffer.Add(IndexOffset + 4);
+            IndexBuffer.Add(IndexOffset + 5);
 
             // Second rectangle
-            IndexBuffer.Add(VertexOffset + 6 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 7 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 8 + IndexOffset);
+            IndexBuffer.Add(IndexOffset + 6);
+            IndexBuffer.Add(IndexOffset + 7);
+            IndexBuffer.Add(IndexOffset + 8);
 
-            IndexBuffer.Add(VertexOffset + 7 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 10 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 8 + IndexOffset);
+            IndexBuffer.Add(IndexOffset + 9);
+            IndexBuffer.Add(IndexOffset + 10);
+            IndexBuffer.Add(IndexOffset + 11);
 
             // Third rectangle
-            IndexBuffer.Add(VertexOffset + 12 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 13 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 14 + IndexOffset);
+            IndexBuffer.Add(IndexOffset + 12);
+            IndexBuffer.Add(IndexOffset + 13);
+            IndexBuffer.Add(IndexOffset + 14);
 
-            IndexBuffer.Add(VertexOffset + 13 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 16 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 14 + IndexOffset);
+            IndexBuffer.Add(IndexOffset + 15);
+            IndexBuffer.Add(IndexOffset + 16);
+            IndexBuffer.Add(IndexOffset + 17);
 
             // Fourth rectangle
-            IndexBuffer.Add(VertexOffset + 18 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 19 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 20 + IndexOffset);
+            IndexBuffer.Add(IndexOffset + 18);
+            IndexBuffer.Add(IndexOffset + 19);
+            IndexBuffer.Add(IndexOffset + 20);
 
-            IndexBuffer.Add(VertexOffset + 19 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 22 + IndexOffset);
-            IndexBuffer.Add(VertexOffset + 20 + IndexOffset);
+            IndexBuffer.Add(IndexOffset + 21);
+            IndexBuffer.Add(IndexOffset + 22);
+            IndexBuffer.Add(IndexOffset + 23);
 
-            // Increment the vertex offset for the next line
-            VertexOffset += 24;
+            // Increment the IndexOffset for the next line
+            IndexOffset += 24;
         }
 
         NewSection->IndexBuffer.SetIndices(IndexBuffer, EIndexBufferStride::Force16Bit);
@@ -557,6 +522,8 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 void FLineMeshSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineMeshSectionUpdateData> SectionData)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionRT);
+
+    // FIXME:
 
     check (IsInRenderingThread());
 
