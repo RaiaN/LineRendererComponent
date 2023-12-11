@@ -31,7 +31,6 @@ class FLineMeshSectionUpdateData
 public:
 	int32 SectionIndex;
 	TArray<FVector3f> VertexBuffer;
-	TArray<uint32> IndexBuffer;
 	FBox3f SectionLocalBox;
 	FLinearColor Color;
 };
