@@ -94,8 +94,6 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& V
             ProcMeshSceneProxy->UpdateSection_RenderThread(SectionData);
         }
     );
-
-    UpdateLocalBounds();
 }
 
 void ULineMeshComponent::RemoveLine(int32 SectionIndex)
@@ -130,17 +128,6 @@ int32 ULineMeshComponent::GetNumSections() const
 {
 	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
 	return LineMeshSceneProxy->GetNumSections();
-}
-
-void ULineMeshComponent::UpdateLocalBounds()
-{
-    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
-    LineMeshSceneProxy->UpdateLocalBounds();
-    
-    // Update global bounds
-	UpdateBounds();
-	// Need to send to render thread
-	MarkRenderTransformDirty();
 }
 
 FPrimitiveSceneProxy* ULineMeshComponent::CreateSceneProxy()

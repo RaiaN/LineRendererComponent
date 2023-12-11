@@ -192,7 +192,7 @@ FLineMeshSceneProxy::~FLineMeshSceneProxy()
 {
     check(IsInRenderingThread());
 
-    Sections.Empty();
+    Sections_RenderThread.Empty();
 }
 
 SIZE_T FLineMeshSceneProxy::GetTypeHash() const
@@ -206,7 +206,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_GetMeshElements);
 
     // Iterate over sections
-    for (const TTuple<int32, TSharedPtr<FLineMeshProxySection>>& KeyValueIter : Sections)
+    for (const TTuple<int32, TSharedPtr<FLineMeshProxySection>>& KeyValueIter : Sections_RenderThread)
     {
         TSharedPtr<FLineMeshProxySection> Section = KeyValueIter.Value;
 
@@ -512,13 +512,13 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
             SetUsedMaterialForVerification(UsedMaterials);
 #endif
 
-            Sections.Add(SrcSectionIndex, SectionRef);
+            Sections_RenderThread.Add(SrcSectionIndex, SectionRef);
 
             SectionRef->bInitialized = true;
+
+            UpdateLocalBounds();
         }
     );
-
-    Component->UpdateLocalBounds();
 }
 
 void FLineMeshSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineMeshSectionUpdateData> SectionData)
@@ -529,13 +529,13 @@ void FLineMeshSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineMeshSection
 
     check (SectionData.IsValid());
 
-    if (!Sections.Contains(SectionData->SectionIndex))
+    if (!Sections_RenderThread.Contains(SectionData->SectionIndex))
     {
         return;
     }
 
     // Check it references a valid section
-    TSharedPtr<FLineMeshProxySection> Section = Sections[SectionData->SectionIndex];
+    TSharedPtr<FLineMeshProxySection> Section = Sections_RenderThread[SectionData->SectionIndex];
 
     const int32 NumVerts = SectionData->VertexBuffer.Num();
 
@@ -556,6 +556,8 @@ void FLineMeshSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineMeshSection
 
     Section->Color = SectionData->Color;
     Section->SectionLocalBox = SectionData->SectionLocalBox;
+
+    UpdateLocalBounds();
 }
 
 bool FLineMeshSceneProxy::CanBeOccluded() const
@@ -575,14 +577,14 @@ uint32 FLineMeshSceneProxy::GetAllocatedSize() const
 
 int32 FLineMeshSceneProxy::GetNumSections() const
 {
-    return Sections.Num();
+    return Sections_RenderThread.Num();
 }
 
 int32 FLineMeshSceneProxy::GetNumPointsInSection(int32 SectionIndex) const
 {
-    if (Sections.Contains(SectionIndex))
+    if (Sections_RenderThread.Contains(SectionIndex))
     {
-        return Sections[SectionIndex]->PositionVB->GetNumVertices();
+        return Sections_RenderThread[SectionIndex]->PositionVB->GetNumVertices();
     }
 
     return 0;
@@ -593,7 +595,7 @@ void FLineMeshSceneProxy::ClearMeshSection(int32 SectionIndex)
     ENQUEUE_RENDER_COMMAND(ReleaseSectionResources)(
         [this, SectionIndex](FRHICommandListImmediate&)
         {
-            Sections.Remove(SectionIndex);
+            Sections_RenderThread.Remove(SectionIndex);
         }
     );
     
@@ -602,7 +604,7 @@ void FLineMeshSceneProxy::ClearMeshSection(int32 SectionIndex)
 void FLineMeshSceneProxy::ClearAllMeshSections()
 {
     TArray<int32> SectionIndices;
-    Sections.GetKeys(SectionIndices);
+    Sections_RenderThread.GetKeys(SectionIndices);
 
     for (int32 SectionIndex : SectionIndices)
     {
@@ -615,9 +617,9 @@ void FLineMeshSceneProxy::SetMeshSectionVisible(int32 SectionIndex, bool bNewVis
     ENQUEUE_RENDER_COMMAND(SetMeshSectionVisibility)(
         [this, SectionIndex, bNewVisibility](FRHICommandListImmediate&)
         {
-            if (Sections.Contains(SectionIndex))
+            if (Sections_RenderThread.Contains(SectionIndex))
             {
-                Sections[SectionIndex]->bSectionVisible = bNewVisibility;
+                Sections_RenderThread[SectionIndex]->bSectionVisible = bNewVisibility;
             }
         }
     );
@@ -625,14 +627,14 @@ void FLineMeshSceneProxy::SetMeshSectionVisible(int32 SectionIndex, bool bNewVis
 
 bool FLineMeshSceneProxy::IsMeshSectionVisible(int32 SectionIndex) const
 {
-    return Sections.Contains(SectionIndex) && Sections[SectionIndex]->bSectionVisible;
+    return Sections_RenderThread.Contains(SectionIndex) && Sections_RenderThread[SectionIndex]->bSectionVisible;
 }
 
 void FLineMeshSceneProxy::UpdateLocalBounds()
 {
     FBox3f LocalBox(ForceInit);
 
-    for (const TTuple<int32, TSharedPtr<FLineMeshProxySection>>& KeyValueIter : Sections)
+    for (const TTuple<int32, TSharedPtr<FLineMeshProxySection>>& KeyValueIter : Sections_RenderThread)
     {
         TSharedPtr<FLineMeshProxySection> Section = KeyValueIter.Value;
         LocalBox += Section->SectionLocalBox;

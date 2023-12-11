@@ -71,5 +71,5 @@ private:
 	FMaterialRelevance MaterialRelevance;
 	FBoxSphereBounds3f LocalBounds;
 
-	TMap<int32, TSharedPtr<FLineMeshProxySection>> Sections;
+	TMap<int32, TSharedPtr<FLineMeshProxySection>> Sections_RenderThread;
 };
