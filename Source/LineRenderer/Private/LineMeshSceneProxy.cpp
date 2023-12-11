@@ -6,7 +6,8 @@
 #include "LocalVertexFactory.h"
 #include "LineMeshComponent.h"
 #include "LineMeshSection.h"
-#include "RHICommandList.h"
+#include "ShaderCore.h"
+#include "ShowFlags.h"
 
 class FPositionOnlyVertexData :
     public TStaticMeshVertexData<FPositionVertex>
@@ -125,6 +126,12 @@ private:
 class FLineMeshProxySection : public TSharedFromThis<FLineMeshProxySection>
 {
 public:
+    FLineMeshProxySection(ERHIFeatureLevel::Type InFeatureLevel)
+        : VertexFactory(InFeatureLevel, "FLineMeshProxySection")
+        , bSectionVisible(true)
+        , bInitialized(false)
+    {}
+
     virtual ~FLineMeshProxySection()
     {
         check (IsInRenderingThread());
@@ -173,12 +180,6 @@ public:
     class UMaterialInterface* Material;
     /** Color applied to this section */
     FLinearColor Color;
-
-    FLineMeshProxySection(ERHIFeatureLevel::Type InFeatureLevel)
-        : VertexFactory(InFeatureLevel, "FLineMeshProxySection")
-        , bSectionVisible(true)
-        , bInitialized(false)
-    {}
 };
 
 
@@ -205,6 +206,10 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_GetMeshElements);
 
+    const FEngineShowFlags& EngineShowFlags = ViewFamily.EngineShowFlags;
+
+    const bool bIsWireframeView = EngineShowFlags.Wireframe;
+
     // Iterate over sections
     for (const TTuple<int32, TSharedPtr<FLineMeshProxySection>>& KeyValueIter : Sections_RenderThread)
     {
@@ -230,6 +235,11 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     Mesh.Type = PT_TriangleList;
                     Mesh.DepthPriorityGroup = SDPG_World;
                     Mesh.bCanApplyViewModeOverrides = false;
+
+                    if (AllowDebugViewmodes() && bIsWireframeView)
+                    {
+                        Mesh.bWireframe = true;
+                    }
 
                     const FMatrix& WorldToClip = View->ViewMatrices.GetViewProjectionMatrix();
                     const FMatrix& ClipToWorld = View->ViewMatrices.GetInvViewProjectionMatrix();
