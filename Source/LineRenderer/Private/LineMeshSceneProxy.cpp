@@ -240,17 +240,17 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     FVector CameraY = ClipToWorld.TransformVector(FVector(0, 1, 0)).GetSafeNormal();
                     FVector CameraZ = ClipToWorld.TransformVector(FVector(0, 0, 1)).GetSafeNormal();
 
-                    const float ScreenSpaceScaling = 2.0f; // Line.bScreenSpace ? 2.0f : 1.0f;
                     const float Thickness = Section->Lines[0].Thickness;
 
                     const float StartW = WorldToClip.TransformFVector4(Section->Lines[0].Start).W;
                     const float EndW = WorldToClip.TransformFVector4(Section->Lines[0].End).W;
 
                     // Negative thickness means that thickness is calculated in screen space, positive thickness should be used for world space thickness.
-                    const float ScalingStart = StartW / ViewportSizeX;
-                    const float ScalingEnd = EndW / ViewportSizeX;
+                    const float ScalingStart = 1.0f;
+                    const float ScalingEnd = 1.0f;
 
                     const float CurrentOrthoZoomFactor = 1.0f;
+                    const float ScreenSpaceScaling = 1.0f;
 
                     const float StartThickness = Thickness * ScreenSpaceScaling * CurrentOrthoZoomFactor * ScalingStart;
                     const float EndThickness = Thickness * ScreenSpaceScaling * CurrentOrthoZoomFactor * ScalingEnd;
