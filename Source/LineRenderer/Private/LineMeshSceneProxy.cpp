@@ -133,7 +133,8 @@ public:
         delete PositionVB;
         IndexBuffer.ReleaseResource();
 
-        // StaticMeshVertexBuffer.ReleaseResource();
+        // Using LocalVertexFactory requires to deinit all buffers
+        StaticMeshVertexBuffer.ReleaseResource();
         // ColorVertexBuffer.ReleaseResource();
         
         VertexFactory.ReleaseResource();
@@ -148,7 +149,7 @@ public:
     FRawStaticIndexBuffer IndexBuffer;
 
     /** The buffer containing vertex data (UVs and tangents) */
-    // FStaticMeshVertexBuffer StaticMeshVertexBuffer;
+    FStaticMeshVertexBuffer StaticMeshVertexBuffer;
     /** The buffer containing the vertex color data. */
     // FColorVertexBuffer ColorVertexBuffer;
 
@@ -225,7 +226,7 @@ void FLineMeshSceneProxy::GetDynamicMeshElements(const TArray<const FSceneView*>
                     Mesh.VertexFactory = &Section->VertexFactory;
                     Mesh.MaterialRenderProxy = MaterialProxy;
                     Mesh.ReverseCulling = !IsLocalToWorldDeterminantNegative();
-                    Mesh.bDisableBackfaceCulling = false;
+                    Mesh.bDisableBackfaceCulling = true;
                     Mesh.Type = PT_TriangleList;
                     Mesh.DepthPriorityGroup = SDPG_World;
                     Mesh.bCanApplyViewModeOverrides = false;
@@ -379,7 +380,8 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 
         NewSection->PositionVB = new FDynamicPositionVertexBuffer(NumVerts);
 
-        // NewSection->StaticMeshVertexBuffer.Init(NumVerts, 1, true);
+        // Using LocalVertexFactory requires to init all buffers
+        NewSection->StaticMeshVertexBuffer.Init(NumVerts, 1, true);
         // NewSection->ColorVertexBuffer.Init(NumVerts, true);
 
         for (const FBatchedLine& Line : NewSection->Lines)
@@ -478,7 +480,9 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
         // Enqueue initialization of render resource
         BeginInitResource(NewSection->PositionVB);
         BeginInitResource(&NewSection->IndexBuffer);
-        // BeginInitResource(&NewSection->StaticMeshVertexBuffer);
+
+        // Using LocalVertexFactory requires to init all buffers
+        BeginInitResource(&NewSection->StaticMeshVertexBuffer);
         // BeginInitResource(&NewSection->ColorVertexBuffer);
     }
 
@@ -491,11 +495,12 @@ void FLineMeshSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineMeshSection> 
 
             SectionRef->PositionVB->BindPositionVertexBuffer(&SectionRef->VertexFactory, Data);
 
-            // SectionRef->VertexBuffers.StaticMeshVertexBuffer.BindTangentVertexBuffer(&SectionRef->VertexFactory, Data);
-            // SectionRef->VertexBuffers.StaticMeshVertexBuffer.BindPackedTexCoordVertexBuffer(&SectionRef->VertexFactory, Data);
-            // SectionRef->VertexBuffers.StaticMeshVertexBuffer.BindLightMapVertexBuffer(&SectionRef->VertexFactory, Data, 1);
+            // Using LocalVertexFactory requires to init all buffers
+            SectionRef->StaticMeshVertexBuffer.BindTangentVertexBuffer(&SectionRef->VertexFactory, Data);
+            SectionRef->StaticMeshVertexBuffer.BindPackedTexCoordVertexBuffer(&SectionRef->VertexFactory, Data);
+            SectionRef->StaticMeshVertexBuffer.BindLightMapVertexBuffer(&SectionRef->VertexFactory, Data, 1);
 
-            // Data.LODLightmapDataIndex = 0;
+            Data.LODLightmapDataIndex = 0;
 
             SectionRef->VertexFactory.SetData(Data);
             SectionRef->VertexFactory.InitResource();
