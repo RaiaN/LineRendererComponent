@@ -28,7 +28,7 @@ public:
 	void CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void UpdateLine(int32 SectionIndex, const TArray<FVector>& InVertices, const FLinearColor& Color);
+	void UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	void RemoveLine(int32 SectionIndex);
@@ -44,7 +44,7 @@ public:
 
 	/** Returns number of sections currently created for this component */
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	int32 GetNumLines() const;
+	int32 GetNumSections() const;
 
 public:
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
