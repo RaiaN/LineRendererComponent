@@ -340,7 +340,7 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
                     GetScene().GetPrimitiveUniformShaderParameters_RenderThread(GetPrimitiveSceneInfo(), bHasPrecomputedVolumetricLightmap, PreviousLocalToWorld, SingleCaptureIndex, bOutputVelocity);
 
                     FDynamicPrimitiveUniformBuffer& DynamicPrimitiveUniformBuffer = Collector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
-                    DynamicPrimitiveUniformBuffer.Set(GetLocalToWorld(), PreviousLocalToWorld, GetBounds(), GetLocalBounds(), true, bHasPrecomputedVolumetricLightmap, bOutputVelocity);
+                    DynamicPrimitiveUniformBuffer.Set(GetLocalToWorld(), PreviousLocalToWorld, GetBounds(), FBoxSphereBounds(GetLocalBounds()), true, bHasPrecomputedVolumetricLightmap, bOutputVelocity);
                     BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
 
                     BatchElement.FirstIndex = 0;
@@ -671,10 +671,31 @@ void FLineRendererComponentSceneProxy::UpdateLocalBounds()
     }
 
     ensure (LocalBox.IsValid);
-    LocalBounds = FBoxSphereBounds3f(LocalBox);
+    // LocalBounds = FBoxSphereBounds3f(LocalBox);
 }
 
-FBoxSphereBounds FLineRendererComponentSceneProxy::GetLocalBounds() const
+void FLineRendererComponentSceneProxy::UpdateLocalBounds(const TArray<FBatchedLine>& Lines)
 {
-    return FBoxSphereBounds(LocalBounds);
+    
+}
+
+void FLineRendererComponentSceneProxy::UpdateLocalBounds(const TArray<FVector3f>& VertexBuffer)
+{
+    
+}
+
+FBoxSphereBounds3f FLineRendererComponentSceneProxy::GetLocalBounds() const
+{
+    FBoxSphereBounds3f LocalBox(ForceInit);
+
+    for (const TTuple<int32, TSharedPtr<FLineProxySection>>& KeyValueIter : Sections_RenderThread)
+    {
+        TSharedPtr<FLineProxySection> Section = KeyValueIter.Value;
+        LocalBox = LocalBox + FBoxSphereBounds3f(Section->SectionLocalBox);
+    }
+
+    // ensure(LocalBox.IsValid);
+    // LocalBounds = FBoxSphereBounds3f(LocalBox);
+
+    return LocalBox;
 }

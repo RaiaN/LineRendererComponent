@@ -13,6 +13,7 @@
 #include "SceneManagement.h"
 #include "SceneView.h"
 #include "Materials/MaterialRelevance.h"
+#include "Components/LineBatchComponent.h"
 
 
 struct FLineSectionInfo;
@@ -48,7 +49,9 @@ public:
     void SetMeshSectionVisible(int32 SectionIndex, bool bNewVisibility);
     bool IsMeshSectionVisible(int32 SectionIndex) const;
 	void UpdateLocalBounds();
-	FBoxSphereBounds GetLocalBounds() const;
+	void UpdateLocalBounds(const TArray<FBatchedLine>& Lines);
+	void UpdateLocalBounds(const TArray<FVector3f>& VertexBuffer);
+	FBoxSphereBounds3f GetLocalBounds() const;
 
 private:
 	ULineRendererComponent* Component;

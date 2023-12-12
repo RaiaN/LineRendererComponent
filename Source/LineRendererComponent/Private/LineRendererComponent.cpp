@@ -190,7 +190,7 @@ FBoxSphereBounds ULineRendererComponent::CalcBounds(const FTransform& LocalToWor
 {
     FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 
-    FBoxSphereBounds LocalBounds(FBoxSphereBounds3f(FVector3f(0, 0, 0), FVector3f(0, 0, 0), 0));
+    FBoxSphereBounds3f LocalBounds(FVector3f(0, 0, 0), FVector3f(0, 0, 0), 0);
     if (LineMeshSceneProxy != nullptr)
     {
         LocalBounds = LineMeshSceneProxy->GetLocalBounds();
