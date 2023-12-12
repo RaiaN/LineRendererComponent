@@ -1,0 +1,25 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "1.0",
+  "FriendlyName": "Line Renderer Component",
+  "Description": "Performant line drawing and hitch-free modifications at runtime",
+  "Category": "Graphics",
+  "CreatedBy": "Unreal Solutions Ltd",
+  "CreatedByURL": "https://unrealsolutions.com",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "SupportURL": "https://discord.gg/wptvWkhtGm",
+  "CanContainContent": true,
+  "IsBetaVersion": false,
+  "IsExperimentalVersion": false,
+  "Installed": false,
+  "Modules": [
+	{
+	  "Name": "LineRendererComponent",
+	  "Type": "Runtime",
+	  "LoadingPhase": "Default",
+	  "WhitelistPlatforms": [ "Win64", "Android", "Linux" ]
+	}
+  ]
+}
