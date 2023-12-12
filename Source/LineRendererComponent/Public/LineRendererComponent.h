@@ -41,7 +41,7 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	bool IsLineVisible(int32 SectionIndex) const;
 
-	/** Returns number of sections currently created for this component */
+	/** Returns number of lines currently created for this component */
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	int32 GetNumSections() const;
 
@@ -69,10 +69,10 @@ private:
 	//~ Begin USceneComponent Interface.
 
 private:
-	UPROPERTY()
+	UPROPERTY(Transient)
     TMap<int32, FLineSectionInfo> Sections;
 
-	UPROPERTY()
+	UPROPERTY(Transient)
     TMap<int32, UMaterialInstanceDynamic*> SectionMaterials;
 
     friend class FLineRendererComponentSceneProxy;
