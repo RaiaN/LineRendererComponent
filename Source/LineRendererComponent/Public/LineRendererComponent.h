@@ -57,8 +57,6 @@ protected:
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	//~ End UMeshComponent Interface.
 
-	void BeginDestroy() override;
-
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components|LineRenderer")
 	UMaterialInterface* LineMaterial;

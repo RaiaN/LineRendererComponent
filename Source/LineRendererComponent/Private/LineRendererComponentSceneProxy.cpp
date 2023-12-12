@@ -190,7 +190,6 @@ public:
     FLinearColor Color;
 };
 
-PRAGMA_DISABLE_OPTIMIZATION
 FLineRendererComponentSceneProxy::FLineRendererComponentSceneProxy(ULineRendererComponent* InComponent)
 : FPrimitiveSceneProxy(InComponent), Component(InComponent), MaterialRelevance(Component->GetMaterialRelevance(GetScene().GetFeatureLevel()))
 {
@@ -207,7 +206,6 @@ FLineRendererComponentSceneProxy::~FLineRendererComponentSceneProxy()
 
     Sections_RenderThread.Empty();
 }
-PRAGMA_ENABLE_OPTIMIZATION
 
 SIZE_T FLineRendererComponentSceneProxy::GetTypeHash() const
 {
@@ -385,7 +383,6 @@ FPrimitiveViewRelevance FLineRendererComponentSceneProxy::GetViewRelevance(const
     return Result;
 }
 
-PRAGMA_DISABLE_OPTIMIZATION
 void FLineRendererComponentSceneProxy::AddNewSection_GameThread(const FLineSectionInfo* SrcSection)
 {
     check(IsInGameThread());
@@ -549,7 +546,6 @@ void FLineRendererComponentSceneProxy::AddNewSection_GameThread(const FLineSecti
         }
     );
 }
-PRAGMA_ENABLE_OPTIMIZATION
 
 bool FLineRendererComponentSceneProxy::CanBeOccluded() const
 {

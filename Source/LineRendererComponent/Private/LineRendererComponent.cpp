@@ -67,10 +67,6 @@ void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector
     Sections.Add(SectionIndex, Section);
 
     MarkRenderStateDirty();
-
-    // Enqueue command to send to render thread
-    // FLineRendererComponentSceneProxy* ProcMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-    // ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
 }
 
 void ULineRendererComponent::RemoveLine(int32 SectionIndex)
@@ -105,14 +101,6 @@ int32 ULineRendererComponent::GetNumSections() const
 {
 	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 	return LineMeshSceneProxy->GetNumSections();
-}
-
-void ULineRendererComponent::BeginDestroy()
-{
-    Sections.Empty();
-    
-    Super::BeginDestroy();
-    
 }
 
 FPrimitiveSceneProxy* ULineRendererComponent::CreateSceneProxy()
@@ -176,7 +164,7 @@ FBoxSphereBounds ULineRendererComponent::CalcBounds(const FTransform& LocalToWor
 {
     FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 
-    FBoxSphereBounds LocalBounds(FVector(0, 0, 0), FVector(100, 100, 100), 0);
+    FBoxSphereBounds LocalBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0);
     if (LineMeshSceneProxy != nullptr)
     {
         LocalBounds = LineMeshSceneProxy->CalculateBounds();
