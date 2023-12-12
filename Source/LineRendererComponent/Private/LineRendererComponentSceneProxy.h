@@ -48,15 +48,13 @@ public:
     void ClearAllMeshSections();
     void SetMeshSectionVisible(int32 SectionIndex, bool bNewVisibility);
     bool IsMeshSectionVisible(int32 SectionIndex) const;
-	void UpdateLocalBounds();
-	void UpdateLocalBounds(const TArray<FBatchedLine>& Lines);
-	void UpdateLocalBounds(const TArray<FVector3f>& VertexBuffer);
-	FBoxSphereBounds3f GetLocalBounds() const;
+	FBoxSphereBounds CalculateBounds() const;
+
+protected:
 
 private:
 	ULineRendererComponent* Component;
 	FMaterialRelevance MaterialRelevance;
-	FBoxSphereBounds3f LocalBounds;
 
 	TMap<int32, TSharedPtr<FLineProxySection>> Sections_RenderThread;
 };

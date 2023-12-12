@@ -340,7 +340,7 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
                     GetScene().GetPrimitiveUniformShaderParameters_RenderThread(GetPrimitiveSceneInfo(), bHasPrecomputedVolumetricLightmap, PreviousLocalToWorld, SingleCaptureIndex, bOutputVelocity);
 
                     FDynamicPrimitiveUniformBuffer& DynamicPrimitiveUniformBuffer = Collector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
-                    DynamicPrimitiveUniformBuffer.Set(GetLocalToWorld(), PreviousLocalToWorld, GetBounds(), FBoxSphereBounds(GetLocalBounds()), true, bHasPrecomputedVolumetricLightmap, bOutputVelocity);
+                    DynamicPrimitiveUniformBuffer.Set(GetLocalToWorld(), PreviousLocalToWorld, GetBounds(), GetLocalBounds(), true, bHasPrecomputedVolumetricLightmap, bOutputVelocity);
                     BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
 
                     BatchElement.FirstIndex = 0;
@@ -537,8 +537,6 @@ void FLineRendererComponentSceneProxy::AddNewSection_GameThread(TSharedPtr<FLine
             Sections_RenderThread.Add(SrcSectionIndex, SectionRef);
 
             SectionRef->bInitialized = true;
-
-            UpdateLocalBounds();
         }
     );
 }
@@ -586,8 +584,6 @@ void FLineRendererComponentSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLi
             Line.Thickness = SectionData->Thickness;
         }
     }
-
-    UpdateLocalBounds();
 }
 
 bool FLineRendererComponentSceneProxy::CanBeOccluded() const
@@ -628,7 +624,6 @@ void FLineRendererComponentSceneProxy::ClearMeshSection(int32 SectionIndex)
             Sections_RenderThread.Remove(SectionIndex);
         }
     );
-    
 }
 
 void FLineRendererComponentSceneProxy::ClearAllMeshSections()
@@ -660,42 +655,15 @@ bool FLineRendererComponentSceneProxy::IsMeshSectionVisible(int32 SectionIndex) 
     return Sections_RenderThread.Contains(SectionIndex) && Sections_RenderThread[SectionIndex]->bSectionVisible;
 }
 
-void FLineRendererComponentSceneProxy::UpdateLocalBounds()
+FBoxSphereBounds FLineRendererComponentSceneProxy::CalculateBounds() const
 {
-    FBox3f LocalBox(ForceInit);
+    FBoxSphereBounds LocalBox(ForceInit);
 
     for (const TTuple<int32, TSharedPtr<FLineProxySection>>& KeyValueIter : Sections_RenderThread)
     {
         TSharedPtr<FLineProxySection> Section = KeyValueIter.Value;
-        LocalBox += Section->SectionLocalBox;
+        LocalBox = LocalBox + FBoxSphereBounds(FBoxSphereBounds3f(Section->SectionLocalBox));
     }
-
-    ensure (LocalBox.IsValid);
-    // LocalBounds = FBoxSphereBounds3f(LocalBox);
-}
-
-void FLineRendererComponentSceneProxy::UpdateLocalBounds(const TArray<FBatchedLine>& Lines)
-{
-    
-}
-
-void FLineRendererComponentSceneProxy::UpdateLocalBounds(const TArray<FVector3f>& VertexBuffer)
-{
-    
-}
-
-FBoxSphereBounds3f FLineRendererComponentSceneProxy::GetLocalBounds() const
-{
-    FBoxSphereBounds3f LocalBox(ForceInit);
-
-    for (const TTuple<int32, TSharedPtr<FLineProxySection>>& KeyValueIter : Sections_RenderThread)
-    {
-        TSharedPtr<FLineProxySection> Section = KeyValueIter.Value;
-        LocalBox = LocalBox + FBoxSphereBounds3f(Section->SectionLocalBox);
-    }
-
-    // ensure(LocalBox.IsValid);
-    // LocalBounds = FBoxSphereBounds3f(LocalBox);
 
     return LocalBox;
 }
