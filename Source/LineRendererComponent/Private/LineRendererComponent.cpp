@@ -41,7 +41,10 @@ void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateMeshSection);
 
-    TSharedPtr<FLineSectionInfo> NewSection(MakeShareable(new FLineSectionInfo));
+    FLineSectionInfo Section;
+
+    FLineSectionInfo* NewSection = &Section;
+
     NewSection->SectionIndex = SectionIndex;
     NewSection->Color = Color;
 
@@ -61,43 +64,13 @@ void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector
 
     NewSection->Material = CreateOrUpdateMaterial(SectionIndex, Color);
 
-    // Enqueue command to send to render thread
-    FLineRendererComponentSceneProxy* ProcMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-    ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
-}
+    Sections.Add(SectionIndex, Section);
 
-void ULineRendererComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness)
-{
-    // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionGT);
-    FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-
-    if (SectionIndex >= LineMeshSceneProxy->GetNumSections())
-    {
-        return;
-    }
-
-    // Recreate line if mismatch in number of vertices
-    if (Vertices.Num() != LineMeshSceneProxy->GetNumPointsInSection(SectionIndex))
-    {
-        CreateLine(SectionIndex, Vertices, Color, Thickness);
-        return;
-    }
-
-    TSharedPtr<FLineSectionUpdateData> SectionData(MakeShareable(new FLineSectionUpdateData));
-    SectionData->SectionIndex = SectionIndex;
-    SectionData->Color = Color;
-    SectionData->VertexBuffer.Append(Vertices);
-    SectionData->SectionLocalBox = FBox3f(SectionData->VertexBuffer);
-    SectionData->Thickness = Thickness;
+    MarkRenderStateDirty();
 
     // Enqueue command to send to render thread
-    FLineRendererComponentSceneProxy* ProcMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-    ENQUEUE_RENDER_COMMAND(FLineMeshSectionUpdate)(
-        [ProcMeshSceneProxy, SectionData](FRHICommandListImmediate& RHICmdList)
-        {
-            ProcMeshSceneProxy->UpdateSection_RenderThread(SectionData);
-        }
-    );
+    // FLineRendererComponentSceneProxy* ProcMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    // ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
 }
 
 void ULineRendererComponent::RemoveLine(int32 SectionIndex)
@@ -134,11 +107,24 @@ int32 ULineRendererComponent::GetNumSections() const
 	return LineMeshSceneProxy->GetNumSections();
 }
 
+void ULineRendererComponent::BeginDestroy()
+{
+    Sections.Empty();
+    
+    Super::BeginDestroy();
+    
+}
+
 FPrimitiveSceneProxy* ULineRendererComponent::CreateSceneProxy()
 {
 	// SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateSceneProxy);
 
-    return new FLineRendererComponentSceneProxy(this);
+    if (Sections.Num() > 0)
+    {
+        return new FLineRendererComponentSceneProxy(this);
+    }
+
+    return nullptr;
 }
 
 UMaterialInterface* ULineRendererComponent::GetMaterial(int32 ElementIndex) const

@@ -30,9 +30,6 @@ public:
 
 	SIZE_T GetTypeHash() const override;
 
-	void AddNewSection_GameThread(TSharedPtr<FLineSectionInfo> NewSection);
-	void UpdateSection_RenderThread(TSharedPtr<FLineSectionUpdateData> SectionData);
-
 	virtual void GetDynamicMeshElements(const TArray<const FSceneView*>& Views, const FSceneViewFamily& ViewFamily, uint32 VisibilityMap, FMeshElementCollector& Collector) const override;
 	virtual FPrimitiveViewRelevance GetViewRelevance(const FSceneView* View) const;
 
@@ -50,7 +47,8 @@ public:
     bool IsMeshSectionVisible(int32 SectionIndex) const;
 	FBoxSphereBounds CalculateBounds() const;
 
-protected:
+private:
+	void AddNewSection_GameThread(const FLineSectionInfo* NewSection);
 
 private:
 	ULineRendererComponent* Component;

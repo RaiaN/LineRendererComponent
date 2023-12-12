@@ -68,6 +68,8 @@ public:
 
         const uint32 SizeInBytes = NumVertices * sizeof(FVector3f) * 8 * 3;
 
+        check (SizeInBytes >= 0);
+
         VertexBufferRHI = RHICreateVertexBuffer(SizeInBytes, BUF_Dynamic | BUF_ShaderResource, CreateInfo);
         if (VertexBufferRHI)
         {
@@ -188,11 +190,16 @@ public:
     FLinearColor Color;
 };
 
-
+PRAGMA_DISABLE_OPTIMIZATION
 FLineRendererComponentSceneProxy::FLineRendererComponentSceneProxy(ULineRendererComponent* InComponent)
 : FPrimitiveSceneProxy(InComponent), Component(InComponent), MaterialRelevance(Component->GetMaterialRelevance(GetScene().GetFeatureLevel()))
 {
+    for (const auto& SectionKeyPair : Component->Sections)
+    {
+        AddNewSection_GameThread(&SectionKeyPair.Value);
+    }
 }
+
 
 FLineRendererComponentSceneProxy::~FLineRendererComponentSceneProxy()
 {
@@ -200,6 +207,7 @@ FLineRendererComponentSceneProxy::~FLineRendererComponentSceneProxy()
 
     Sections_RenderThread.Empty();
 }
+PRAGMA_ENABLE_OPTIMIZATION
 
 SIZE_T FLineRendererComponentSceneProxy::GetTypeHash() const
 {
@@ -377,7 +385,8 @@ FPrimitiveViewRelevance FLineRendererComponentSceneProxy::GetViewRelevance(const
     return Result;
 }
 
-void FLineRendererComponentSceneProxy::AddNewSection_GameThread(TSharedPtr<FLineSectionInfo> SrcSection)
+PRAGMA_DISABLE_OPTIMIZATION
+void FLineRendererComponentSceneProxy::AddNewSection_GameThread(const FLineSectionInfo* SrcSection)
 {
     check(IsInGameThread());
 
@@ -387,7 +396,7 @@ void FLineRendererComponentSceneProxy::AddNewSection_GameThread(TSharedPtr<FLine
 
     TSharedPtr<FLineProxySection> NewSection(MakeShareable(new FLineProxySection(GetScene().GetFeatureLevel())));
     {
-        NewSection->Lines = MoveTemp(SrcSection->Lines);
+        NewSection->Lines = SrcSection->Lines;
         NewSection->MaxVertexIndex = NumVerts - 1;
         NewSection->SectionIndex = SrcSectionIndex;
         NewSection->Material = SrcSection->Material;
@@ -540,51 +549,7 @@ void FLineRendererComponentSceneProxy::AddNewSection_GameThread(TSharedPtr<FLine
         }
     );
 }
-
-void FLineRendererComponentSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLineSectionUpdateData> SectionData)
-{
-    // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionRT);
-
-    check (IsInRenderingThread());
-
-    check (SectionData.IsValid());
-
-    if (!Sections_RenderThread.Contains(SectionData->SectionIndex))
-    {
-        return;
-    }
-
-    // Check it references a valid section
-    TSharedPtr<FLineProxySection> Section = Sections_RenderThread[SectionData->SectionIndex];
-
-    const int32 NumVerts = SectionData->VertexBuffer.Num();
-
-    FDynamicPositionVertexBuffer& SrcBuffer = *Section->PositionVB;
-
-    // Iterate through vertex data, copying in new info
-    for (int32 i = 0; i < NumVerts; i++)
-    {
-        SrcBuffer.VertexPosition(i) = SectionData->VertexBuffer[i];
-    }
-
-    // update vertex buffer
-    {
-        void* DstBuffer = RHILockBuffer(SrcBuffer.VertexBufferRHI, 0, SrcBuffer.GetNumVertices() * SrcBuffer.GetStride(), RLM_WriteOnly);
-        FMemory::Memcpy(DstBuffer, SrcBuffer.GetVertexData(), SrcBuffer.GetNumVertices() * SrcBuffer.GetStride());
-        RHIUnlockBuffer(SrcBuffer.VertexBufferRHI);
-    }
-
-    Section->Color = SectionData->Color;
-    Section->SectionLocalBox = SectionData->SectionLocalBox;
-
-    if (SectionData->Thickness > 0.0f)
-    {
-        for (FBatchedLine& Line : Section->Lines)
-        {
-            Line.Thickness = SectionData->Thickness;
-        }
-    }
-}
+PRAGMA_ENABLE_OPTIMIZATION
 
 bool FLineRendererComponentSceneProxy::CanBeOccluded() const
 {

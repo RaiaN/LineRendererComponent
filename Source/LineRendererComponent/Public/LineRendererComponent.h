@@ -5,13 +5,14 @@
 #include "CoreMinimal.h"
 #include "Components/MeshComponent.h"
 #include "Materials/MaterialRelevance.h"
+#include "Templates/SharedPointer.h"
+#include "LineSectionInfo.h"
 #include "LineRendererComponent.generated.h"
 
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class FPrimitiveSceneProxy;
 class FLineRendererComponentSceneProxy;
-struct FLineSectionInfo;
 
 
 UCLASS(hidecategories = (Object, LOD), meta = (BlueprintSpawnableComponent))
@@ -27,9 +28,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	void CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness = 1.0f);
-
-	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness = -1.0f);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	void RemoveLine(int32 SectionIndex);
@@ -59,6 +57,8 @@ protected:
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	//~ End UMeshComponent Interface.
 
+	void BeginDestroy() override;
+
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components|LineRenderer")
 	UMaterialInterface* LineMaterial;
@@ -71,6 +71,9 @@ private:
 	//~ Begin USceneComponent Interface.
 
 private:
+	UPROPERTY()
+    TMap<int32, FLineSectionInfo> Sections;
+
 	UPROPERTY()
     TMap<int32, UMaterialInstanceDynamic*> SectionMaterials;
 
