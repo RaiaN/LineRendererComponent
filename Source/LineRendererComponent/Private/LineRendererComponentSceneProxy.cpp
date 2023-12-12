@@ -6,6 +6,7 @@
 #include "LocalVertexFactory.h"
 #include "ShaderCore.h"
 #include "ShowFlags.h"
+#include "SceneInterface.h"
 #include "LineRendererComponent.h"
 #include "LineSectionInfo.h"
 
