@@ -4,22 +4,22 @@
 
 #include "CoreMinimal.h"
 #include "Components/MeshComponent.h"
-#include "LineMeshComponent.generated.h"
+#include "LineRendererComponent.generated.h"
 
 class UMaterialInstanceDynamic;
 class UMaterialInterface;
 class FPrimitiveSceneProxy;
-class FLineMeshSceneProxy;
-struct FLineMeshSection;
+class FLineRendererComponentSceneProxy;
+struct FLineSectionInfo;
 
 
 UCLASS(hidecategories = (Object, LOD), meta = (BlueprintSpawnableComponent))
-class LINERENDERER_API ULineMeshComponent : public UMeshComponent
+class LINERENDERERCOMPONENT_API ULineRendererComponent : public UMeshComponent
 {
 	GENERATED_BODY()
 
 public:
-	ULineMeshComponent(const FObjectInitializer& ObjectInitializer);
+	ULineRendererComponent(const FObjectInitializer& ObjectInitializer);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	void CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness, int32 NumSegments = 1);
@@ -46,10 +46,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	int32 GetNumSections() const;
 
-public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	UMaterialInterface* Material;
-
 protected:
 	//~ Begin UPrimitiveComponent Interface.
 	virtual FPrimitiveSceneProxy* CreateSceneProxy() override;
@@ -61,6 +57,10 @@ protected:
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	//~ End UMeshComponent Interface.
 
+protected:
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components|LineRenderer")
+	UMaterialInterface* Material;
+
 private: 
 	UMaterialInterface* CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color);
 
@@ -70,9 +70,6 @@ private:
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
 	//~ Begin USceneComponent Interface.
 
-	/** Update LocalBounds member from the local box of each section */
-	void UpdateLocalBounds();
-
 private:
 	UPROPERTY()
     TMap<int32, UMaterialInstanceDynamic*> SectionMaterials;
@@ -80,7 +77,7 @@ private:
     UPROPERTY()
     TMap<int32, FLinearColor> SectionColors;
 
-    friend class FLineMeshSceneProxy;
+    friend class FLineRendererComponentSceneProxy;
 };
 
 

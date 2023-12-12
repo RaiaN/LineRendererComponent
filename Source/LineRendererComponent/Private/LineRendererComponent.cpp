@@ -1,19 +1,21 @@
 // Copyright Peter Leontev
 
-#include "LineMeshComponent.h"
-#include "LineMeshSceneProxy.h"
-#include "LineMeshSection.h"
+#include "LineRendererComponent.h"
 #include "BatchedElements.h"
+#include "Materials/MaterialInterface.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "LineRendererComponentSceneProxy.h"
+#include "LineSectionInfo.h"
 
 
 DEFINE_LOG_CATEGORY_STATIC(LogLineMeshComponent, Log, All);
 
-ULineMeshComponent::ULineMeshComponent(const FObjectInitializer& ObjectInitializer)
+ULineRendererComponent::ULineRendererComponent(const FObjectInitializer& ObjectInitializer)
 : Super(ObjectInitializer)
 {
 }
 
-void ULineMeshComponent::CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness, int32 NumSegments)
+void ULineRendererComponent::CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness, int32 NumSegments)
 {
     if (NumSegments == 1)
     {
@@ -34,11 +36,11 @@ void ULineMeshComponent::CreateLine2Points(int32 SectionIndex, const FVector& St
     CreateLine(SectionIndex, Vertices, Color, Thickness);
 }
 
-void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness)
+void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateMeshSection);
 
-    TSharedPtr<FLineMeshSection> NewSection(MakeShareable(new FLineMeshSection));
+    TSharedPtr<FLineSectionInfo> NewSection(MakeShareable(new FLineSectionInfo));
     NewSection->SectionIndex = SectionIndex;
     NewSection->Color = Color;
 
@@ -59,14 +61,14 @@ void ULineMeshComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& V
     NewSection->Material = CreateOrUpdateMaterial(SectionIndex, Color);
 
     // Enqueue command to send to render thread
-    FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    FLineRendererComponentSceneProxy* ProcMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
     ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
 }
 
-void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color)
+void ULineRendererComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionGT);
-    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 
     if (SectionIndex >= LineMeshSceneProxy->GetNumSections())
     {
@@ -80,14 +82,14 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& V
         return;
     }
 
-    TSharedPtr<FLineMeshSectionUpdateData> SectionData(MakeShareable(new FLineMeshSectionUpdateData));
+    TSharedPtr<FLineSectionUpdateData> SectionData(MakeShareable(new FLineSectionUpdateData));
     SectionData->SectionIndex = SectionIndex;
     SectionData->Color = CreateOrUpdateSectionColor(SectionIndex, Color);
     SectionData->VertexBuffer.Append(Vertices);
     SectionData->SectionLocalBox = FBox3f(SectionData->VertexBuffer);
 
     // Enqueue command to send to render thread
-    FLineMeshSceneProxy* ProcMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    FLineRendererComponentSceneProxy* ProcMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
     ENQUEUE_RENDER_COMMAND(FLineMeshSectionUpdate)(
         [ProcMeshSceneProxy, SectionData](FRHICommandListImmediate& RHICmdList)
         {
@@ -96,48 +98,48 @@ void ULineMeshComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& V
     );
 }
 
-void ULineMeshComponent::RemoveLine(int32 SectionIndex)
+void ULineRendererComponent::RemoveLine(int32 SectionIndex)
 {
-	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 	LineMeshSceneProxy->ClearMeshSection(SectionIndex);
 
     SectionColors.Remove(SectionIndex);
 }
 
-void ULineMeshComponent::RemoveAllLines()
+void ULineRendererComponent::RemoveAllLines()
 {
-	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 	LineMeshSceneProxy->ClearAllMeshSections();
 
     SectionColors.Empty();
 }
 
-void ULineMeshComponent::SetLineVisible(int32 SectionIndex, bool bNewVisibility)
+void ULineRendererComponent::SetLineVisible(int32 SectionIndex, bool bNewVisibility)
 {
-	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 	LineMeshSceneProxy->SetMeshSectionVisible(SectionIndex, bNewVisibility);
 }
 
-bool ULineMeshComponent::IsLineVisible(int32 SectionIndex) const
+bool ULineRendererComponent::IsLineVisible(int32 SectionIndex) const
 {
-    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
     return LineMeshSceneProxy->IsMeshSectionVisible(SectionIndex);
 }
 
-int32 ULineMeshComponent::GetNumSections() const
+int32 ULineRendererComponent::GetNumSections() const
 {
-	FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 	return LineMeshSceneProxy->GetNumSections();
 }
 
-FPrimitiveSceneProxy* ULineMeshComponent::CreateSceneProxy()
+FPrimitiveSceneProxy* ULineRendererComponent::CreateSceneProxy()
 {
 	// SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateSceneProxy);
 
-	return new FLineMeshSceneProxy(this);
+	return new FLineRendererComponentSceneProxy(this);
 }
 
-UMaterialInterface* ULineMeshComponent::GetMaterial(int32 ElementIndex) const
+UMaterialInterface* ULineRendererComponent::GetMaterial(int32 ElementIndex) const
 {
     if (SectionMaterials.Contains(ElementIndex))
     {
@@ -147,7 +149,7 @@ UMaterialInterface* ULineMeshComponent::GetMaterial(int32 ElementIndex) const
     return nullptr;
 }
 
-void ULineMeshComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /*= false*/) const
+void ULineRendererComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /*= false*/) const
 {
     Super::GetUsedMaterials(OutMaterials, bGetDebugMaterials);
 
@@ -159,7 +161,7 @@ void ULineMeshComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMateri
     }
 }
 
-UMaterialInterface* ULineMeshComponent::CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color)
+UMaterialInterface* ULineRendererComponent::CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color)
 {
     if (!SectionMaterials.Contains(SectionIndex))
     {
@@ -174,7 +176,7 @@ UMaterialInterface* ULineMeshComponent::CreateOrUpdateMaterial(int32 SectionInde
     return MI;
 }
 
-FLinearColor ULineMeshComponent::CreateOrUpdateSectionColor(int32 SectionIndex, const FLinearColor& Color)
+FLinearColor ULineRendererComponent::CreateOrUpdateSectionColor(int32 SectionIndex, const FLinearColor& Color)
 {
     if (!SectionColors.Contains(SectionIndex))
     {
@@ -184,9 +186,9 @@ FLinearColor ULineMeshComponent::CreateOrUpdateSectionColor(int32 SectionIndex, 
     return SectionColors[SectionIndex];
 }
 
-FBoxSphereBounds ULineMeshComponent::CalcBounds(const FTransform& LocalToWorld) const
+FBoxSphereBounds ULineRendererComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-    FLineMeshSceneProxy* LineMeshSceneProxy = (FLineMeshSceneProxy*)SceneProxy;
+    FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 
     FBoxSphereBounds LocalBounds(FBoxSphereBounds3f(FVector3f(0, 0, 0), FVector3f(0, 0, 0), 0));
     if (LineMeshSceneProxy != nullptr)
