@@ -192,7 +192,7 @@ public:
 FLineRendererComponentSceneProxy::FLineRendererComponentSceneProxy(ULineRendererComponent* InComponent)
 : FPrimitiveSceneProxy(InComponent), Component(InComponent), MaterialRelevance(Component->GetMaterialRelevance(GetScene().GetFeatureLevel()))
 {
-    
+    bSupportsSortedTriangles = true;
 }
 
 FLineRendererComponentSceneProxy::~FLineRendererComponentSceneProxy()
@@ -237,7 +237,7 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
                     Mesh.VertexFactory = &Section->VertexFactory;
                     Mesh.MaterialRenderProxy = MaterialProxy;
                     Mesh.ReverseCulling = !IsLocalToWorldDeterminantNegative();
-                    Mesh.bDisableBackfaceCulling = true;
+                    Mesh.bDisableBackfaceCulling = Section->Material->IsTwoSided();
                     Mesh.Type = PT_TriangleList;
                     Mesh.DepthPriorityGroup = SDPG_World;
                     Mesh.bCanApplyViewModeOverrides = false;
@@ -371,8 +371,11 @@ FPrimitiveViewRelevance FLineRendererComponentSceneProxy::GetViewRelevance(const
     Result.bUsesLightingChannels = GetLightingChannelMask() != GetDefaultLightingChannelMask();
     Result.bRenderCustomDepth = ShouldRenderCustomDepth();
     Result.bTranslucentSelfShadow = bCastVolumetricTranslucentShadow;
-    MaterialRelevance.SetPrimitiveViewRelevance(Result);
+    
     Result.bVelocityRelevance = IsMovable() && Result.bOpaque && Result.bRenderInMainPass;
+
+    MaterialRelevance.SetPrimitiveViewRelevance(Result);
+
     return Result;
 }
 
@@ -405,8 +408,8 @@ void FLineRendererComponentSceneProxy::AddNewSection_GameThread(TSharedPtr<FLine
             NewSection->SectionLocalBox += FVector3f(Line.Start);
             NewSection->SectionLocalBox += FVector3f(Line.End);
 
-            /* NO UV support just yet
-            // FStaticMeshVertexBuffer& StaticMeshVB = NewSection->VertexBuffers.StaticMeshVertexBuffer;
+            // NO UV support just yet
+            FStaticMeshVertexBuffer& StaticMeshVB = NewSection->StaticMeshVertexBuffer;
             
             // Begin point
             StaticMeshVB.SetVertexUV(0, 0, FVector2f(1, 0));
@@ -443,7 +446,12 @@ void FLineRendererComponentSceneProxy::AddNewSection_GameThread(TSharedPtr<FLine
             StaticMeshVB.SetVertexUV(21, 0, FVector2f(1, 0));
             StaticMeshVB.SetVertexUV(22, 0, FVector2f(1, 0));
             StaticMeshVB.SetVertexUV(23, 0, FVector2f(0, 1));
-            */
+
+            for (int32 Index = 0; Index < 24; ++Index)
+            {
+                StaticMeshVB.SetVertexTangents(Index, FVector3f::UpVector, FVector3f::RightVector, FVector3f::ForwardVector);
+            }
+            //*/
         }
 
         TArray<uint32> IndexBuffer;

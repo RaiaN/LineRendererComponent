@@ -168,7 +168,7 @@ UMaterialInterface* ULineRendererComponent::CreateOrUpdateMaterial(int32 Section
     {
         UMaterialInstanceDynamic* MI = UMaterialInstanceDynamic::Create(Material, this);
         SectionMaterials.Add(SectionIndex, MI);
-        OverrideMaterials.Add(MI);
+        // OverrideMaterials.Add(MI);
     }
 
     UMaterialInstanceDynamic* MI = SectionMaterials[SectionIndex];
