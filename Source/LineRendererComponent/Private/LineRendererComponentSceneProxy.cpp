@@ -7,6 +7,7 @@
 #include "ShaderCore.h"
 #include "ShowFlags.h"
 #include "SceneInterface.h"
+#include "Runtime/Launch/Resources/Version.h"
 #include "LineRendererComponent.h"
 #include "LineSectionInfo.h"
 
@@ -52,7 +53,11 @@ public:
     }
 
     // FRenderResource interface.
+#if ENGINE_MAJOR_VERSION >= 4 && ENGINE_MINOR_VERSION < 3
     virtual void InitRHI() override
+#else
+    virtual void InitRHI(FRHICommandListBase& RHICmdList) override
+#endif
     {
         // create dynamic buffer
 
