@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/MeshComponent.h"
+#include "Materials/MaterialRelevance.h"
 #include "LineRendererComponent.generated.h"
 
 class UMaterialInstanceDynamic;
@@ -53,18 +54,17 @@ protected:
 
 	//~ Begin UMeshComponent Interface.
 	virtual UMaterialInterface* GetMaterial(int32 ElementIndex) const override;
+	virtual FMaterialRelevance GetMaterialRelevance(ERHIFeatureLevel::Type InFeatureLevel) const override;
 
 	virtual void GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials = false) const override;
 	//~ End UMeshComponent Interface.
 
 protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Components|LineRenderer")
-	UMaterialInterface* Material;
+	UMaterialInterface* LineMaterial;
 
 private: 
 	UMaterialInterface* CreateOrUpdateMaterial(int32 SectionIndex, const FLinearColor& Color);
-
-	FLinearColor CreateOrUpdateSectionColor(int32 SectionIndex, const FLinearColor& Color);
 
 	//~ Begin USceneComponent Interface.
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
@@ -73,9 +73,6 @@ private:
 private:
 	UPROPERTY()
     TMap<int32, UMaterialInstanceDynamic*> SectionMaterials;
-
-    UPROPERTY()
-    TMap<int32, FLinearColor> SectionColors;
 
     friend class FLineRendererComponentSceneProxy;
 };

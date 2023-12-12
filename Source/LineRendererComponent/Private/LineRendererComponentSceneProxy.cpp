@@ -192,7 +192,6 @@ public:
 FLineRendererComponentSceneProxy::FLineRendererComponentSceneProxy(ULineRendererComponent* InComponent)
 : FPrimitiveSceneProxy(InComponent), Component(InComponent), MaterialRelevance(Component->GetMaterialRelevance(GetScene().GetFeatureLevel()))
 {
-    bSupportsSortedTriangles = true;
 }
 
 FLineRendererComponentSceneProxy::~FLineRendererComponentSceneProxy()
@@ -237,7 +236,6 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
                     Mesh.VertexFactory = &Section->VertexFactory;
                     Mesh.MaterialRenderProxy = MaterialProxy;
                     Mesh.ReverseCulling = !IsLocalToWorldDeterminantNegative();
-                    Mesh.bDisableBackfaceCulling = Section->Material->IsTwoSided();
                     Mesh.Type = PT_TriangleList;
                     Mesh.DepthPriorityGroup = SDPG_World;
                     Mesh.bCanApplyViewModeOverrides = false;

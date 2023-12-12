@@ -4,6 +4,7 @@
 #include "BatchedElements.h"
 #include "Materials/MaterialInterface.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialRelevance.h"
 #include "LineRendererComponentSceneProxy.h"
 #include "LineSectionInfo.h"
 
@@ -84,7 +85,7 @@ void ULineRendererComponent::UpdateLine(int32 SectionIndex, const TArray<FVector
 
     TSharedPtr<FLineSectionUpdateData> SectionData(MakeShareable(new FLineSectionUpdateData));
     SectionData->SectionIndex = SectionIndex;
-    SectionData->Color = CreateOrUpdateSectionColor(SectionIndex, Color);
+    SectionData->Color = Color;
     SectionData->VertexBuffer.Append(Vertices);
     SectionData->SectionLocalBox = FBox3f(SectionData->VertexBuffer);
     SectionData->Thickness = Thickness;
@@ -104,7 +105,7 @@ void ULineRendererComponent::RemoveLine(int32 SectionIndex)
 	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 	LineMeshSceneProxy->ClearMeshSection(SectionIndex);
 
-    SectionColors.Remove(SectionIndex);
+    SectionMaterials.Remove(SectionIndex);
 }
 
 void ULineRendererComponent::RemoveAllLines()
@@ -112,7 +113,7 @@ void ULineRendererComponent::RemoveAllLines()
 	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 	LineMeshSceneProxy->ClearAllMeshSections();
 
-    SectionColors.Empty();
+    SectionMaterials.Empty();
 }
 
 void ULineRendererComponent::SetLineVisible(int32 SectionIndex, bool bNewVisibility)
@@ -137,7 +138,7 @@ FPrimitiveSceneProxy* ULineRendererComponent::CreateSceneProxy()
 {
 	// SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateSceneProxy);
 
-	return new FLineRendererComponentSceneProxy(this);
+    return new FLineRendererComponentSceneProxy(this);
 }
 
 UMaterialInterface* ULineRendererComponent::GetMaterial(int32 ElementIndex) const
@@ -150,11 +151,20 @@ UMaterialInterface* ULineRendererComponent::GetMaterial(int32 ElementIndex) cons
     return nullptr;
 }
 
+FMaterialRelevance ULineRendererComponent::GetMaterialRelevance(ERHIFeatureLevel::Type InFeatureLevel) const
+{
+    if (IsValid(LineMaterial))
+    {
+        return LineMaterial->GetRelevance_Concurrent(InFeatureLevel);
+    }
+    return FMaterialRelevance();
+}
+
 void ULineRendererComponent::GetUsedMaterials(TArray<UMaterialInterface*>& OutMaterials, bool bGetDebugMaterials /*= false*/) const
 {
     Super::GetUsedMaterials(OutMaterials, bGetDebugMaterials);
 
-    OutMaterials.Add(Material);
+    OutMaterials.Add(LineMaterial);
 
     for (TTuple<int32, UMaterialInstanceDynamic*> KeyValuePair : SectionMaterials)
     {
@@ -166,25 +176,14 @@ UMaterialInterface* ULineRendererComponent::CreateOrUpdateMaterial(int32 Section
 {
     if (!SectionMaterials.Contains(SectionIndex))
     {
-        UMaterialInstanceDynamic* MI = UMaterialInstanceDynamic::Create(Material, this);
+        UMaterialInstanceDynamic* MI = UMaterialInstanceDynamic::Create(LineMaterial, this);
         SectionMaterials.Add(SectionIndex, MI);
-        // OverrideMaterials.Add(MI);
     }
 
     UMaterialInstanceDynamic* MI = SectionMaterials[SectionIndex];
     MI->SetVectorParameterValue(TEXT("LineColor"), Color);
 
     return MI;
-}
-
-FLinearColor ULineRendererComponent::CreateOrUpdateSectionColor(int32 SectionIndex, const FLinearColor& Color)
-{
-    if (!SectionColors.Contains(SectionIndex))
-    {
-        SectionColors.Add(SectionIndex, Color);
-    }
-
-    return SectionColors[SectionIndex];
 }
 
 FBoxSphereBounds ULineRendererComponent::CalcBounds(const FTransform& LocalToWorld) const
