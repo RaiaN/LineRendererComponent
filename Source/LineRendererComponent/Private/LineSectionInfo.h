@@ -28,4 +28,6 @@ public:
     TArray<FVector3f> VertexBuffer;
     FBox3f SectionLocalBox;
     FLinearColor Color;
+    float Thickness;
+
 };

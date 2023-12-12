@@ -22,13 +22,13 @@ public:
 	ULineRendererComponent(const FObjectInitializer& ObjectInitializer);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness, int32 NumSegments = 1);
+	void CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness = 1.0f, int32 NumSegments = 1);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness);
+	void CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness = 1.0f);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color);
+	void UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness = -1.0f);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	void RemoveLine(int32 SectionIndex);

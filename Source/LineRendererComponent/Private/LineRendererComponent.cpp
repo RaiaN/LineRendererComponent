@@ -54,7 +54,7 @@ void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector
             Line.Start = StartPoint;
             Line.End = EndPoint;
             Line.Color = Color;
-            Line.Thickness = Thickness;
+            Line.Thickness = Thickness > 0.0f ? Thickness : 1.0f;
         }
     }
 
@@ -65,7 +65,7 @@ void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector
     ProcMeshSceneProxy->AddNewSection_GameThread(NewSection);
 }
 
-void ULineRendererComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color)
+void ULineRendererComponent::UpdateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness)
 {
     // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_UpdateSectionGT);
     FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
@@ -78,7 +78,7 @@ void ULineRendererComponent::UpdateLine(int32 SectionIndex, const TArray<FVector
     // Recreate line if mismatch in number of vertices
     if (Vertices.Num() != LineMeshSceneProxy->GetNumPointsInSection(SectionIndex))
     {
-        CreateLine(SectionIndex, Vertices, Color, -1.0);
+        CreateLine(SectionIndex, Vertices, Color, Thickness);
         return;
     }
 
@@ -87,6 +87,7 @@ void ULineRendererComponent::UpdateLine(int32 SectionIndex, const TArray<FVector
     SectionData->Color = CreateOrUpdateSectionColor(SectionIndex, Color);
     SectionData->VertexBuffer.Append(Vertices);
     SectionData->SectionLocalBox = FBox3f(SectionData->VertexBuffer);
+    SectionData->Thickness = Thickness;
 
     // Enqueue command to send to render thread
     FLineRendererComponentSceneProxy* ProcMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;

@@ -573,6 +573,14 @@ void FLineRendererComponentSceneProxy::UpdateSection_RenderThread(TSharedPtr<FLi
     Section->Color = SectionData->Color;
     Section->SectionLocalBox = SectionData->SectionLocalBox;
 
+    if (SectionData->Thickness > 0.0f)
+    {
+        for (FBatchedLine& Line : Section->Lines)
+        {
+            Line.Thickness = SectionData->Thickness;
+        }
+    }
+
     UpdateLocalBounds();
 }
 
