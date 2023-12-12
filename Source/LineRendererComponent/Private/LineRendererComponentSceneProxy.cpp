@@ -516,7 +516,7 @@ void FLineRendererComponentSceneProxy::AddNewSection_GameThread(const FLineSecti
 
     TSharedRef<FLineProxySection> SectionRef = StaticCastSharedRef<FLineProxySection>(NewSection.ToSharedRef());
 
-    ENQUEUE_RENDER_COMMAND(LineMeshVertexBuffersInit)(
+    ENQUEUE_RENDER_COMMAND(LineVertexBuffersInit)(
         [this, SrcSectionIndex, SectionRef](FRHICommandListImmediate& RHICmdList)
         {
             FLocalVertexFactory::FDataType Data;

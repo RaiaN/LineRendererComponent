@@ -21,7 +21,6 @@ struct FLineSectionUpdateData;
 class ULineRendererComponent;
 class FLineProxySection;
 
-/** Procedural mesh scene proxy */
 class FLineRendererComponentSceneProxy final : public FPrimitiveSceneProxy
 {
 public:

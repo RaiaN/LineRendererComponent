@@ -9,8 +9,6 @@
 #include "LineSectionInfo.h"
 
 
-DEFINE_LOG_CATEGORY_STATIC(LogLineMeshComponent, Log, All);
-
 ULineRendererComponent::ULineRendererComponent(const FObjectInitializer& ObjectInitializer)
 : Super(ObjectInitializer)
 {
@@ -39,8 +37,6 @@ void ULineRendererComponent::CreateLine2Points(int32 SectionIndex, const FVector
 
 void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness)
 {
-    // SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateMeshSection);
-
     FLineSectionInfo Section;
 
     FLineSectionInfo* NewSection = &Section;
@@ -71,42 +67,42 @@ void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector
 
 void ULineRendererComponent::RemoveLine(int32 SectionIndex)
 {
-	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-	LineMeshSceneProxy->ClearMeshSection(SectionIndex);
+	FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    LineSceneProxy->ClearMeshSection(SectionIndex);
 
+    Sections.Remove(SectionIndex);
     SectionMaterials.Remove(SectionIndex);
 }
 
 void ULineRendererComponent::RemoveAllLines()
 {
-	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-	LineMeshSceneProxy->ClearAllMeshSections();
+	FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    LineSceneProxy->ClearAllMeshSections();
 
+    Sections.Empty();
     SectionMaterials.Empty();
 }
 
 void ULineRendererComponent::SetLineVisible(int32 SectionIndex, bool bNewVisibility)
 {
-	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-	LineMeshSceneProxy->SetMeshSectionVisible(SectionIndex, bNewVisibility);
+	FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    LineSceneProxy->SetMeshSectionVisible(SectionIndex, bNewVisibility);
 }
 
 bool ULineRendererComponent::IsLineVisible(int32 SectionIndex) const
 {
-    FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-    return LineMeshSceneProxy->IsMeshSectionVisible(SectionIndex);
+    FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    return LineSceneProxy->IsMeshSectionVisible(SectionIndex);
 }
 
 int32 ULineRendererComponent::GetNumSections() const
 {
-	FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-	return LineMeshSceneProxy->GetNumSections();
+	FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+	return LineSceneProxy->GetNumSections();
 }
 
 FPrimitiveSceneProxy* ULineRendererComponent::CreateSceneProxy()
 {
-	// SCOPE_CYCLE_COUNTER(STAT_ProcMesh_CreateSceneProxy);
-
     if (Sections.Num() > 0)
     {
         return new FLineRendererComponentSceneProxy(this);
@@ -162,12 +158,12 @@ UMaterialInterface* ULineRendererComponent::CreateOrUpdateMaterial(int32 Section
 
 FBoxSphereBounds ULineRendererComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-    FLineRendererComponentSceneProxy* LineMeshSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
 
     FBoxSphereBounds LocalBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0);
-    if (LineMeshSceneProxy != nullptr)
+    if (LineSceneProxy != nullptr)
     {
-        LocalBounds = LineMeshSceneProxy->CalculateBounds();
+        LocalBounds = LineSceneProxy->CalculateBounds();
     }
 
     FBoxSphereBounds Ret(FBoxSphereBounds(LocalBounds).TransformBy(LocalToWorld));
