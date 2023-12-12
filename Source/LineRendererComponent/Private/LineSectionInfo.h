@@ -21,5 +21,6 @@ public:
     TArray<FBatchedLine> Lines;
     FLinearColor Color;
 
+    UPROPERTY()
     UMaterialInterface* Material;
 };
