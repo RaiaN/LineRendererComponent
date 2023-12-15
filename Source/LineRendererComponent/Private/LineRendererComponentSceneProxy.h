@@ -54,4 +54,6 @@ private:
 	FMaterialRelevance MaterialRelevance;
 
 	TMap<int32, TSharedPtr<FLineProxySection>> Sections_RenderThread;
+	mutable FThreadSafeBool bBoundsDirty = false;
+	mutable FBoxSphereBounds CachedBounds;
 };

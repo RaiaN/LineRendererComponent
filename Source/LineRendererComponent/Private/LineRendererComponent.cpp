@@ -68,6 +68,11 @@ void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector
 void ULineRendererComponent::RemoveLine(int32 SectionIndex)
 {
 	FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    if (LineSceneProxy == nullptr)
+    {
+        return;
+    }
+
     LineSceneProxy->ClearMeshSection(SectionIndex);
 
     Sections.Remove(SectionIndex);
@@ -77,6 +82,11 @@ void ULineRendererComponent::RemoveLine(int32 SectionIndex)
 void ULineRendererComponent::RemoveAllLines()
 {
 	FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    if (LineSceneProxy == nullptr)
+    {
+        return;
+    }
+
     LineSceneProxy->ClearAllMeshSections();
 
     Sections.Empty();
@@ -86,18 +96,33 @@ void ULineRendererComponent::RemoveAllLines()
 void ULineRendererComponent::SetLineVisible(int32 SectionIndex, bool bNewVisibility)
 {
 	FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    if (LineSceneProxy == nullptr)
+    {
+        return;
+    }
+
     LineSceneProxy->SetMeshSectionVisible(SectionIndex, bNewVisibility);
 }
 
 bool ULineRendererComponent::IsLineVisible(int32 SectionIndex) const
 {
     FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    if (LineSceneProxy == nullptr)
+    {
+        return false;
+    }
+
     return LineSceneProxy->IsMeshSectionVisible(SectionIndex);
 }
 
 int32 ULineRendererComponent::GetNumSections() const
 {
 	FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
+    if (LineSceneProxy == nullptr)
+    {
+        return 0;
+    }
+
 	return LineSceneProxy->GetNumSections();
 }
 
