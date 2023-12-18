@@ -18,19 +18,12 @@ Plugin provides two example Line materials (M_LineDrawer_Opaque_Unlit and M_Line
 Follow these steps:
 
 1) Add Line Renderer Component to Actor/Blueprint:
-
 <img src="Resources/component.png">
-
-3) Call Add Line Bluepint function, pass Section Index and Start and End vertices. Optionally, set Thickness and Line Color:
-
+2) Call Add Line Bluepint function, pass Section Index and Start and End vertices. Optionally, set Thickness and Line Color:
 <img src="Resources/example_0.png">
-
 3) Line Manipulation:
-
 <img src="Resources/example_1.png">
-
 Example result:
-
 <img src="Resources/result.png" width="80%" height="80%">
 
 Platforms: Win64, Android, Linux, Mac
