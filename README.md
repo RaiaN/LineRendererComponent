@@ -23,15 +23,15 @@ Follow these steps:
 
 3) Call Add Line Bluepint function, pass Section Index and Start and End vertices. Optionally, set Thickness and Line Color:
 
-<img src="Resources/example_0.png" width="80%" height="80%">
+<img src="Resources/example_0.png">
 
 3) Line Manipulation:
 
-<img src="Resources/example_1.png" width="80%" height="80%">
+<img src="Resources/example_1.png">
 
 Example result:
 
-<img src="Resources/result.png" width="80%" height="80%">
+<img src="Resources/result.png">
 
 Platforms: Win64, Android, Linux, Mac
 
