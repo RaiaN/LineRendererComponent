@@ -31,7 +31,7 @@ Follow these steps:
 
 Example result:
 
-<img src="Resources/result.png">
+<img src="Resources/result.png" width="80%" height="80%">
 
 Platforms: Win64, Android, Linux, Mac
 
