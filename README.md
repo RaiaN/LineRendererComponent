@@ -18,9 +18,9 @@
 Line Renderer Component allows one to easily draw lines with thickness. Implementation is based on the engine BatchedLines with the modification to control how vertex buffers are filled with user data. This allows to have flexible system to control which lines should be shown, deleted and so on.
 
 **If you want to receive updates via Epic Games Launcher then please support developers by buying this plugin:**
-[https://www.unrealengine.com/marketplace/en-US/product/runtime-image-loader ](https://www.unrealengine.com/marketplace/en-US/product/line-renderer-component)
+[UE Marketplace](https://www.unrealengine.com/marketplace/en-US/product/line-renderer-component)
 
-Discord: https://discord.gg/Ujw7QVrWxG
+[Discord](https://discord.gg/eHdP97Qsgc)
 
 Features:
 * Line drawing in Blueprints via simple interface (Actor Component)
