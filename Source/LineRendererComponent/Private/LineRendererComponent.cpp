@@ -198,3 +198,8 @@ FBoxSphereBounds ULineRendererComponent::CalcBounds(const FTransform& LocalToWor
 
     return Ret;
 }
+
+void ULineRendererComponent::UpdateBounds()
+{
+    Bounds = CalcBounds(FTransform(GetRenderMatrix()));
+}

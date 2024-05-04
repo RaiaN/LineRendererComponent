@@ -66,6 +66,7 @@ private:
 
 	//~ Begin USceneComponent Interface.
 	virtual FBoxSphereBounds CalcBounds(const FTransform& LocalToWorld) const override;
+	virtual void UpdateBounds() override;
 	//~ Begin USceneComponent Interface.
 
 private:
