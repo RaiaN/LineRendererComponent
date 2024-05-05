@@ -183,12 +183,17 @@ UMaterialInterface* ULineRendererComponent::CreateOrUpdateMaterial(int32 Section
 
 FBoxSphereBounds ULineRendererComponent::CalcBounds(const FTransform& LocalToWorld) const
 {
-    FLineRendererComponentSceneProxy* LineSceneProxy = (FLineRendererComponentSceneProxy*)SceneProxy;
-
     FBoxSphereBounds LocalBounds(FVector(0, 0, 0), FVector(0, 0, 0), 0);
-    if (LineSceneProxy != nullptr)
+
+    for (const TTuple<int32, FLineSectionInfo>& SectionInfo : Sections) 
     {
-        LocalBounds = LineSceneProxy->CalculateBounds();
+        const FLineSectionInfo& Section = SectionInfo.Value;
+
+        for (const FBatchedLine& Line : Section.Lines) 
+        {
+            LocalBounds = LocalBounds + FBoxSphereBounds(Line.Start, FVector(Line.Thickness), Line.Thickness);
+            LocalBounds = LocalBounds + FBoxSphereBounds(Line.End, FVector(Line.Thickness), Line.Thickness);
+        }
     }
 
     FBoxSphereBounds Ret(FBoxSphereBounds(LocalBounds).TransformBy(LocalToWorld));

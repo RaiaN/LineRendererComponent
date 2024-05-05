@@ -44,7 +44,6 @@ public:
     void ClearAllMeshSections();
     void SetMeshSectionVisible(int32 SectionIndex, bool bNewVisibility);
     bool IsMeshSectionVisible(int32 SectionIndex) const;
-	FBoxSphereBounds CalculateBounds() const;
 
 private:
 	void AddNewSection_GameThread(const FLineSectionInfo* NewSection);
@@ -54,6 +53,4 @@ private:
 	FMaterialRelevance MaterialRelevance;
 
 	TMap<int32, TSharedPtr<FLineProxySection>> Sections_RenderThread;
-	mutable FThreadSafeBool bBoundsDirty = false;
-	mutable FBoxSphereBounds CachedBounds;
 };

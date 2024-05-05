@@ -219,7 +219,7 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
 
     const FEngineShowFlags& EngineShowFlags = ViewFamily.EngineShowFlags;
 
-    const bool bIsWireframeView = EngineShowFlags.Wireframe;
+    const bool bIsWireframeView = AllowDebugViewmodes() && EngineShowFlags.Wireframe;
 
     // Iterate over sections
 
@@ -357,6 +357,14 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
 
 #if ENABLE_DRAW_DEBUG
                     BatchElement.VisualizeElementIndex = Section->SectionIndex;
+#endif
+
+                    // Draw bounds
+#if !(UE_BUILD_SHIPPING || UE_BUILD_TEST)
+                    if (bIsWireframeView)
+                    {
+                        RenderBounds(Collector.GetPDI(ViewIndex), EngineShowFlags, GetBounds(), IsSelected());
+                    }
 #endif
                    
                     Collector.AddMesh(ViewIndex, Mesh);
@@ -541,9 +549,8 @@ void FLineRendererComponentSceneProxy::AddNewSection_GameThread(const FLineSecti
             SetUsedMaterialForVerification(UsedMaterials);
 #endif
 
-            
+
             Sections_RenderThread.Add(SrcSectionIndex, SectionRef);
-            bBoundsDirty = true;
 
             SectionRef->bInitialized = true;
         }
@@ -589,8 +596,6 @@ void FLineRendererComponentSceneProxy::ClearMeshSection(int32 SectionIndex)
             Sections_RenderThread.Remove(SectionIndex);
         }
     );
-
-    bBoundsDirty = true;
 }
 
 void FLineRendererComponentSceneProxy::ClearAllMeshSections()
@@ -602,8 +607,6 @@ void FLineRendererComponentSceneProxy::ClearAllMeshSections()
     {
         ClearMeshSection(SectionIndex);
     }
-
-    bBoundsDirty = true;
 }
 
 void FLineRendererComponentSceneProxy::SetMeshSectionVisible(int32 SectionIndex, bool bNewVisibility)
@@ -622,26 +625,4 @@ void FLineRendererComponentSceneProxy::SetMeshSectionVisible(int32 SectionIndex,
 bool FLineRendererComponentSceneProxy::IsMeshSectionVisible(int32 SectionIndex) const
 {
     return Sections_RenderThread.FindRef(SectionIndex)->bSectionVisible;
-}
-
-FBoxSphereBounds FLineRendererComponentSceneProxy::CalculateBounds() const
-{
-    if (bBoundsDirty)
-    {
-        FBoxSphereBounds LocalBox(ForceInit);
-
-        TArray<TSharedPtr<FLineProxySection>> Sections;
-        Sections_RenderThread.GenerateValueArray(Sections);
-
-        for (const TSharedPtr<FLineProxySection>& Section : Sections)
-        {
-            LocalBox = LocalBox + FBoxSphereBounds(FBoxSphereBounds3f(Section->SectionLocalBox));
-        }
-
-        bBoundsDirty = false;
-
-        CachedBounds = LocalBox;
-    }
-
-    return CachedBounds;
 }
