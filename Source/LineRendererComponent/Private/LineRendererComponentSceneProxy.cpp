@@ -53,7 +53,7 @@ public:
     }
 
     // FRenderResource interface.
-#if ENGINE_MAJOR_VERSION >= 4 && ENGINE_MINOR_VERSION > 3
+#if ENGINE_MAJOR_VERSION >= 4 && ENGINE_MINOR_VERSION > 2
     virtual void InitRHI(FRHICommandListBase& RHICmdList) override
 #else
     virtual void InitRHI() override
@@ -70,7 +70,7 @@ public:
 
         check (SizeInBytes >= 0);
 
-#if ENGINE_MAJOR_VERSION > 4 && ENGINE_MINOR_VERSION > 3
+#if ENGINE_MAJOR_VERSION > 4 && ENGINE_MINOR_VERSION > 2
         VertexBufferRHI = RHICmdList.CreateVertexBuffer(SizeInBytes, EBufferUsageFlags::Dynamic | EBufferUsageFlags::ShaderResource, CreateInfo);
         if (VertexBufferRHI)
         {
