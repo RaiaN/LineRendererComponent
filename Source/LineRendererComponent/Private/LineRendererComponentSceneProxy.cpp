@@ -53,10 +53,10 @@ public:
     }
 
     // FRenderResource interface.
-#if ENGINE_MAJOR_VERSION >= 4 && ENGINE_MINOR_VERSION < 3
-    virtual void InitRHI() override
-#else
+#if ENGINE_MAJOR_VERSION >= 4 && ENGINE_MINOR_VERSION > 3
     virtual void InitRHI(FRHICommandListBase& RHICmdList) override
+#else
+    virtual void InitRHI() override
 #endif
     {
         // create dynamic buffer
@@ -70,11 +70,20 @@ public:
 
         check (SizeInBytes >= 0);
 
+#if ENGINE_MAJOR_VERSION > 4 && ENGINE_MINOR_VERSION > 3
+        VertexBufferRHI = RHICmdList.CreateVertexBuffer(SizeInBytes, EBufferUsageFlags::Dynamic | EBufferUsageFlags::ShaderResource, CreateInfo);
+        if (VertexBufferRHI)
+        {
+            PositionComponentSRV = RHICmdList.CreateShaderResourceView(FShaderResourceViewInitializer(VertexBufferRHI, PF_R32_FLOAT));
+        }
+        
+#else
         VertexBufferRHI = RHICreateVertexBuffer(SizeInBytes, BUF_Dynamic | BUF_ShaderResource, CreateInfo);
         if (VertexBufferRHI)
         {
             PositionComponentSRV = RHICreateShaderResourceView(FShaderResourceViewInitializer(VertexBufferRHI, PF_R32_FLOAT));
         }
+#endif
     }
 
     virtual void ReleaseRHI() override
@@ -285,7 +294,12 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
                     const int32 VertexBufferRHIBytes = Section->PositionVB->VertexBufferRHI->GetSize();
 
                     FBufferRHIRef VertexBufferRHI = Section->PositionVB->VertexBufferRHI;
+
+#if ENGINE_MAJOR_VERSION > 4 && ENGINE_MINOR_VERSION > 3
+                    FVector3f* ThickVertices = (FVector3f*)Collector.GetRHICommandList().LockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
+#else
                     FVector3f* ThickVertices = (FVector3f*)RHILockBuffer(VertexBufferRHI, 0, VertexBufferRHIBytes, RLM_WriteOnly);
+#endif
 
                     check(ThickVertices);
 
@@ -330,8 +344,11 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
                         ThickVertices += 24;
                     }
 
+#if ENGINE_MAJOR_VERSION > 4 && ENGINE_MINOR_VERSION > 3
+                    Collector.GetRHICommandList().UnlockBuffer(VertexBufferRHI);
+#else
                     RHIUnlockBuffer(VertexBufferRHI);
-                    
+#endif
 
                     FMeshBatchElement& BatchElement = Mesh.Elements[0];
                     BatchElement.IndexBuffer = &Section->IndexBuffer;
@@ -343,7 +360,12 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
                     GetScene().GetPrimitiveUniformShaderParameters_RenderThread(GetPrimitiveSceneInfo(), bHasPrecomputedVolumetricLightmap, PreviousLocalToWorld, SingleCaptureIndex, bOutputVelocity);
 
                     FDynamicPrimitiveUniformBuffer& DynamicPrimitiveUniformBuffer = Collector.AllocateOneFrameResource<FDynamicPrimitiveUniformBuffer>();
+
+#if ENGINE_MAJOR_VERSION > 4 && ENGINE_MINOR_VERSION > 3
+                    DynamicPrimitiveUniformBuffer.Set(Collector.GetRHICommandList(), GetLocalToWorld(), PreviousLocalToWorld, GetBounds(), GetLocalBounds(), true, bHasPrecomputedVolumetricLightmap, bOutputVelocity);
+#else
                     DynamicPrimitiveUniformBuffer.Set(GetLocalToWorld(), PreviousLocalToWorld, GetBounds(), GetLocalBounds(), true, bHasPrecomputedVolumetricLightmap, bOutputVelocity);
+#endif
                     BatchElement.PrimitiveUniformBufferResource = &DynamicPrimitiveUniformBuffer.UniformBuffer;
 
                     BatchElement.FirstIndex = 0;
@@ -535,8 +557,15 @@ void FLineRendererComponentSceneProxy::AddNewSection_GameThread(const FLineSecti
 
             Data.LODLightmapDataIndex = 0;
 
+#if ENGINE_MAJOR_VERSION > 4 && ENGINE_MINOR_VERSION > 3
+            SectionRef->VertexFactory.SetData(RHICmdList, Data);
+            SectionRef->VertexFactory.InitResource(RHICmdList);
+
+#else
             SectionRef->VertexFactory.SetData(Data);
             SectionRef->VertexFactory.InitResource();
+#endif
+            
 
 #if WITH_EDITOR
             TArray<UMaterialInterface*> UsedMaterials;
