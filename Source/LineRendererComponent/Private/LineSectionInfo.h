@@ -18,6 +18,7 @@ struct FLineSectionInfo
 
 public:
     int32 SectionIndex;
+    bool bScreenSpace;
     TArray<FBatchedLine> Lines;
     FLinearColor Color;
 

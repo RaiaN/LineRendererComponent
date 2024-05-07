@@ -24,10 +24,10 @@ public:
 	ULineRendererComponent(const FObjectInitializer& ObjectInitializer);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness = 1.0f, int32 NumSegments = 1);
+	void CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness = 1.0f, int32 NumSegments = 1, bool bScreenSpace = false);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
-	void CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness = 1.0f);
+	void CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness = 1.0f, bool bScreenSpace = false);
 
 	UFUNCTION(BlueprintCallable, Category = "Components|LineRenderer")
 	void RemoveLine(int32 SectionIndex);

@@ -189,6 +189,8 @@ public:
     int32 SectionIndex;
     /** Section thickness */
     float SectionThickness;
+    /** Screenspace line drawing */
+    bool bScreenSpace;
 
     // Customization
     /** Material applied to this section */
@@ -243,6 +245,14 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
                 {
                     const FSceneView* View = Views[ViewIndex];
 
+                    float OrthoZoomFactor = 1.0f;
+
+                    const bool bIsPerspective = View->ViewMatrices.GetProjectionMatrix().M[3][3] < 1.0f ? true : false;
+                    if (!bIsPerspective)
+                    {
+                        OrthoZoomFactor = 1.0f / View->ViewMatrices.GetProjectionMatrix().M[0][0];
+                    }
+
                     // Draw the mesh.
                     FMeshBatch& Mesh = Collector.AllocateMesh();
                     Mesh.VertexFactory = &Section->VertexFactory;
@@ -266,31 +276,6 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
                     FVector CameraY = ClipToWorld.TransformVector(FVector(0, 1, 0)).GetSafeNormal();
                     FVector CameraZ = ClipToWorld.TransformVector(FVector(0, 0, 1)).GetSafeNormal();
 
-                    const float Thickness = Section->Lines[0].Thickness;
-
-                    const float StartW = WorldToClip.TransformFVector4(Section->Lines[0].Start).W;
-                    const float EndW = WorldToClip.TransformFVector4(Section->Lines[0].End).W;
-
-                    // Negative thickness means that thickness is calculated in screen space, positive thickness should be used for world space thickness.
-                    const float ScalingStart = 1.0f;
-                    const float ScalingEnd = 1.0f;
-
-                    const float CurrentOrthoZoomFactor = 1.0f;
-                    const float ScreenSpaceScaling = 1.0f;
-
-                    const float StartThickness = Thickness * ScreenSpaceScaling * CurrentOrthoZoomFactor * ScalingStart;
-                    const float EndThickness = Thickness * ScreenSpaceScaling * CurrentOrthoZoomFactor * ScalingEnd;
-
-                    const FVector WorldPointXS = CameraX * StartThickness * 0.5f;
-                    const FVector WorldPointYS = CameraY * StartThickness * 0.5f;
-
-                    const FVector WorldPointXE = CameraX * EndThickness * 0.5f;
-                    const FVector WorldPointYE = CameraY * EndThickness * 0.5f;
-
-                    // Generate vertices for the point such that the post-transform point size is constant.
-                    const FVector WorldPointX = CameraX * Thickness * StartW / ViewportSizeX;
-                    const FVector WorldPointY = CameraY * Thickness * StartW / ViewportSizeX;
-
                     const int32 VertexBufferRHIBytes = Section->PositionVB->VertexBufferRHI->GetSize();
 
                     FBufferRHIRef VertexBufferRHI = Section->PositionVB->VertexBufferRHI;
@@ -305,6 +290,33 @@ void FLineRendererComponentSceneProxy::GetDynamicMeshElements(const TArray<const
 
                     for (const FBatchedLine& Line : Section->Lines)
                     {
+                        const float Thickness = Line.Thickness;
+
+                        const float StartW = WorldToClip.TransformFVector4(Line.Start).W;
+                        const float EndW = WorldToClip.TransformFVector4(Line.End).W;
+
+                        FVector4 StartClip = WorldToClip.TransformFVector4(Line.Start);
+                        FVector4 EndClip = WorldToClip.TransformFVector4(Line.End);
+
+                        const float ScalingStart = Section->bScreenSpace ? StartW / ViewportSizeX : 1.0;
+                        const float ScalingEnd = Section->bScreenSpace ? EndW / ViewportSizeX : 1.0;
+
+                        const float CurrentOrthoZoomFactor = Section->bScreenSpace ? OrthoZoomFactor : 1.0;
+                        const float ScreenSpaceScaling = Section->bScreenSpace ? 2.0 : 1.0;
+
+                        const float StartThickness = Thickness * ScreenSpaceScaling * CurrentOrthoZoomFactor * ScalingStart;
+                        const float EndThickness = Thickness * ScreenSpaceScaling * CurrentOrthoZoomFactor * ScalingEnd;
+
+                        const FVector WorldPointXS = CameraX * StartThickness * 0.5f;
+                        const FVector WorldPointYS = CameraY * StartThickness * 0.5f;
+
+                        const FVector WorldPointXE = CameraX * EndThickness * 0.5f;
+                        const FVector WorldPointYE = CameraY * EndThickness * 0.5f;
+
+                        // Generate vertices for the point such that the post-transform point size is constant.
+                        const FVector WorldPointX = CameraX * Thickness * StartW / ViewportSizeX;
+                        const FVector WorldPointY = CameraY * Thickness * StartW / ViewportSizeX;
+
                         // Begin point
                         ThickVertices[0] = FVector3f(Line.Start + WorldPointXS - WorldPointYS); // 0S
                         ThickVertices[1] = FVector3f(Line.Start + WorldPointXS + WorldPointYS); // 1S

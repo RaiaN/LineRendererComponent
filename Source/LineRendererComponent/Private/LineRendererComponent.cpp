@@ -14,11 +14,11 @@ ULineRendererComponent::ULineRendererComponent(const FObjectInitializer& ObjectI
 {
 }
 
-void ULineRendererComponent::CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness, int32 NumSegments)
+void ULineRendererComponent::CreateLine2Points(int32 SectionIndex, const FVector& StartPoint, const FVector& EndPoint, const FLinearColor& Color, float Thickness, int32 NumSegments, bool bScreenSpace)
 {
     if (NumSegments == 1)
     {
-        CreateLine(SectionIndex, { StartPoint, EndPoint }, Color, Thickness);
+        CreateLine(SectionIndex, { StartPoint, EndPoint }, Color, Thickness, bScreenSpace);
         return;
     }
 
@@ -32,10 +32,10 @@ void ULineRendererComponent::CreateLine2Points(int32 SectionIndex, const FVector
         Vertices.Add(CurrPoint);
     }
 
-    CreateLine(SectionIndex, Vertices, Color, Thickness);
+    CreateLine(SectionIndex, Vertices, Color, Thickness, bScreenSpace);
 }
 
-void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness)
+void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector>& Vertices, const FLinearColor& Color, float Thickness, bool bScreenSpace)
 {
     FLineSectionInfo Section;
 
@@ -43,6 +43,7 @@ void ULineRendererComponent::CreateLine(int32 SectionIndex, const TArray<FVector
 
     NewSection->SectionIndex = SectionIndex;
     NewSection->Color = Color;
+    NewSection->bScreenSpace = bScreenSpace;
 
     for (int32 Ind = 0; Ind < Vertices.Num() - 1; ++Ind)
     {
