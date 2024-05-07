@@ -142,8 +142,6 @@ public:
 
     virtual ~FLineProxySection()
     {
-        check (IsInRenderingThread());
-
         PositionVB->ReleaseResource();
         delete PositionVB;
         IndexBuffer.ReleaseResource();
@@ -202,8 +200,6 @@ FLineRendererComponentSceneProxy::FLineRendererComponentSceneProxy(ULineRenderer
 
 FLineRendererComponentSceneProxy::~FLineRendererComponentSceneProxy()
 {
-    check(IsInRenderingThread());
-
     Sections_RenderThread.Empty();
 }
 
